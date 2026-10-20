@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Интерактивная визуализация многофакторной (многоиндексной) модели панельных данных">
+<title>Многофакторная модель: визуализация</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=STIX+Two+Text:ital,wght@0,500;0,600;1,400;1,600&display=swap">
+<style>
+/* Layout: заголовок → шаги → сцена (профили / нагрузки / SVD | карта / 3D-проекция / образцы) → текст + управление → листалка */
+:root{
+  --paper:#eef2f4; --panel:#fafbfc; --plot:#f6f8f9; --ink:#14202b; --muted:#566573;
+  --rule:#d2dbe2; --grid:#e1e8ed; --axis:#a3b1bc;
+  --accent:#bf3a20; --accent2:#7b3fa0; --est:#1d5fbf;
+  --hpos:#1d5fbf; --hneg:#c8500a;
+  --f-head:"STIX Two Text","Cambria",Georgia,serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-math:"STIX Two Text","Cambria Math","Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0e1317; --panel:#141b21; --plot:#11181d; --ink:#e3eaef; --muted:#8e9eab;
+  --rule:#26313a; --grid:#1d2830; --axis:#465661;
+  --accent:#ff7a5a; --accent2:#c79bff; --est:#6aa8ff; --hpos:#6aa8ff; --hneg:#ff9b6a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0e1317; --panel:#141b21; --plot:#11181d; --ink:#e3eaef; --muted:#8e9eab;
+  --rule:#26313a; --grid:#1d2830; --axis:#465661;
+  --accent:#ff7a5a; --accent2:#c79bff; --est:#6aa8ff; --hpos:#6aa8ff; --hneg:#ff9b6a; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:16px/1.55 var(--f-body)}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:28px 40px}
+.eyebrow{font:500 12px/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+h1{font:600 clamp(30px,4.4vw,46px)/1.08 var(--f-head);margin:0 0 10px;letter-spacing:-.01em;text-wrap:balance}
+.lead{max-width:68ch;color:var(--muted);margin:0}
+
+.steps{display:flex;gap:6px;margin:24px 0 16px;overflow-x:auto;padding-bottom:4px}
+.steps button{flex:0 0 auto;display:flex;align-items:baseline;gap:8px;border:1px solid var(--rule);background:transparent;color:var(--muted);padding:8px 12px;border-radius:6px;font:500 14px/1.2 var(--f-body);cursor:pointer}
+.steps button .n{font:500 12px var(--f-mono)}
+.steps button:hover{color:var(--ink);border-color:var(--axis)}
+.steps button[aria-current="step"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);gap:16px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:14px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.ph{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px}
+.ph h3{margin:0;font:600 14px/1.3 var(--f-body)}
+.hint{font-size:13px;color:var(--muted)}
+
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.card{position:relative;padding:0;border:1px solid var(--rule);border-radius:4px;background:var(--plot);aspect-ratio:1.45;display:block;width:100%;max-width:100%;color:inherit;font:inherit;cursor:pointer;transition:opacity .15s}
+.card svg{width:100%;height:100%;display:block}
+.card .lab{position:absolute;left:6px;top:3px;font:500 12px var(--f-mono);pointer-events:none}
+.card .ell{position:absolute;right:6px;bottom:2px;font:500 10.5px var(--f-mono);color:var(--accent);pointer-events:none}
+.pr-est{fill:none;stroke:var(--ink);stroke-width:1.1;stroke-linejoin:round}
+.pr-ghost{fill:none;stroke:var(--muted);stroke-width:.9;opacity:.4}
+.zero{stroke:var(--axis);stroke-width:1}
+
+#right,#side2d{width:100%;height:auto;display:block}
+#right.rot{touch-action:none;cursor:grab}
+#right.dragging{cursor:grabbing}
+.has-hl [data-i]:not(.hl){opacity:.22}
+.has-hl .card.hl{outline:2px solid var(--accent);outline-offset:1px}
+
+.lg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--muted)}
+.lg span{display:inline-flex;align-items:center;gap:5px}
+.sw{display:inline-block;width:18px;height:0;border-top:2.5px solid var(--ink)}
+.sw.b1{border-color:var(--accent);border-top-width:3px}
+.sw.b2{border-color:var(--accent2);border-top-width:3px}
+.sw.d1{border-color:var(--accent);border-top-style:dashed;border-top-width:2px}
+.sw.d2{border-color:var(--accent2);border-top-style:dashed;border-top-width:2px}
+.sw.res{border-color:var(--est);border-top-style:dashed;border-top-width:1.5px}
+.sw.fl{border-color:var(--est)}
+.sw.pl{height:10px;border:1px solid color-mix(in oklab,var(--accent) 45%,transparent);background:color-mix(in oklab,var(--accent) 12%,transparent);border-radius:2px}
+.sw.fpl{height:10px;border:1px solid color-mix(in oklab,var(--est) 50%,transparent);background:color-mix(in oklab,var(--est) 14%,transparent);border-radius:2px}
+.sw.heat{height:10px;border:0;background:linear-gradient(90deg,var(--hneg),var(--plot),var(--hpos));border-radius:2px;width:44px}
+
+/* svg */
+.plotbg{fill:var(--plot)}
+.grid{stroke:var(--grid);stroke-width:1}
+.axis{stroke:var(--axis);stroke-width:1.2}
+.axis.neg{stroke-dasharray:3 4;opacity:.7}
+.tick{fill:var(--muted);font:11px var(--f-mono)}
+.axl{fill:var(--muted);font:12.5px var(--f-body)}
+.axl3{fill:var(--muted);font:500 12.5px var(--f-body)}
+.a-ink line{stroke:var(--ink);stroke-width:1.9}.a-ink polygon{fill:var(--ink)}
+.a-ghost line{stroke:var(--muted);stroke-width:1.1}.a-ghost polygon{fill:var(--muted)}
+.a-mx line{stroke:var(--c);stroke-width:2}.a-mx polygon{fill:var(--c)}
+.plane{fill:color-mix(in oklab,var(--accent) 11%,transparent);stroke:color-mix(in oklab,var(--accent) 45%,transparent);stroke-width:1}
+.plgrid{stroke:color-mix(in oklab,var(--accent) 22%,transparent);stroke-width:.8}
+.fplane{fill:color-mix(in oklab,var(--est) 13%,transparent);stroke:color-mix(in oklab,var(--est) 55%,transparent);stroke-width:1.2}
+.fline{stroke:var(--est);stroke-width:2.6}
+.res{stroke:var(--est);stroke-width:1.2;stroke-dasharray:3 3}
+.tipl{fill:var(--ink);font:500 11px var(--f-mono)}
+.pt{fill:var(--ink)}
+.ptl{fill:var(--ink);font:500 11.5px var(--f-mono)}
+.ax1{stroke:var(--accent);stroke-width:1.6}
+.ax2{stroke:var(--accent2);stroke-width:1.6}
+.ax1l{fill:var(--accent);font:500 12.5px var(--f-body)}
+.ax2l{fill:var(--accent2);font:500 12.5px var(--f-body)}
+.cb1{fill:none;stroke:var(--accent);stroke-width:2.4}
+.cb2{fill:none;stroke:var(--accent2);stroke-width:2.4}
+.cd1{fill:none;stroke:var(--accent);stroke-width:1.7;stroke-dasharray:5 4}
+.cd2{fill:none;stroke:var(--accent2);stroke-width:1.7;stroke-dasharray:5 4}
+.csum{fill:none;stroke:var(--ink);stroke-width:2.6}
+.ttl{fill:var(--ink);font:600 13px var(--f-body)}
+.sbar{fill:var(--est)}
+.sbar.off{fill:var(--axis)}
+.sval{fill:var(--ink);font:500 11px var(--f-mono)}
+.note3{fill:var(--est);font:500 12.5px var(--f-body)}
+.rowl{fill:var(--ink);font:500 11px var(--f-mono)}
+
+.explain{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
+.text{min-width:0;padding-inline:4px}
+.text h2{font:600 clamp(23px,2.6vw,28px)/1.2 var(--f-head);margin:0 0 12px;text-wrap:balance}
+.text p{margin:0 0 12px;max-width:66ch}
+.text b{font-weight:600}
+.formula{font-family:var(--f-math);font-style:italic;font-size:19px;padding:12px 14px;border-left:3px solid var(--accent);background:var(--panel);margin:4px 0 16px;overflow-x:auto;white-space:nowrap;max-width:66ch}
+.m{font-family:var(--f-math);font-style:italic;font-size:1.1em;white-space:nowrap}
+.t{font-family:var(--f-body);font-style:normal;font-size:.8em}
+.c1{color:var(--accent)}.c2{color:var(--accent2)}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.grp{border:1px solid var(--rule);border-radius:8px;padding:12px 14px;background:var(--panel);display:grid;gap:12px}
+.grp h4{margin:0;font:500 11.5px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.ctl{display:grid;gap:4px}
+.ctl label{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.ctl output{font:500 13px var(--f-mono);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--ink);margin:2px 0}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:500 14px var(--f-body);padding:8px 12px;border-radius:6px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+.btn:hover{background:color-mix(in oklab,var(--ink) 8%,transparent)}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.btn:disabled{opacity:.35;cursor:default}
+.seg{display:inline-flex;border:1px solid var(--ink);border-radius:6px;overflow:hidden;width:max-content}
+.seg button{font:500 14px var(--f-mono);padding:7px 14px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.seg button+button{border-left:1px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+dl.ro{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;margin:0;font-size:14px}
+dl.ro dt{color:var(--muted)}
+dl.ro dd{margin:0;font:500 14px var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+.good{color:var(--est)}
+
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--rule)}
+.pager .pos{font:500 13px var(--f-mono);color:var(--muted)}
+.foot{margin-top:22px;font-size:13px;color:var(--muted);max-width:80ch}
+:focus-visible{outline:2px solid var(--est);outline-offset:2px}
+
+@media (max-width:860px){.stage,.explain{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:560px){
+  .wrap{padding-inline:16px;padding-block:20px 32px}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .formula{font-size:17px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Панельные данные · раздел 3 · многоиндексная модель</p>
+    <h1>Многофакторная модель: визуализация</h1>
+    <p class="lead">Продолжение однофакторной модели. У каждого магазина 100 признаков, а реагируют магазины не на один общий индекс, а на два. Пять шагов: от зашумлённых реакций магазинов до поиска общей плоскости в 100-мерном пространстве.</p>
+  </header>
+
+  <nav class="steps" id="steps" aria-label="Шаги"></nav>
+
+  <section class="stage">
+    <div class="panel">
+      <div class="ph"><h3 id="leftTitle"></h3><span class="hint" id="leftHint"></span></div>
+      <div class="cards" id="cards"></div>
+      <svg id="side2d" viewBox="0 0 400 400" role="img" aria-label="Левая панель" hidden></svg>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3 id="rightTitle"></h3><span class="hint" id="rightHint"></span></div>
+      <div class="lg" id="legend"></div>
+      <svg id="right" viewBox="0 0 400 400" role="img" aria-label="Правая панель"></svg>
+    </div>
+  </section>
+
+  <section class="explain">
+    <article class="text" id="text" aria-live="polite"></article>
+    <aside class="side">
+      <div class="grp" id="g-cam" hidden>
+        <h4>Вид</h4>
+        <div class="row">
+          <button class="btn" id="v-edge" type="button">Сбоку на плоскость</button>
+          <button class="btn" id="v-face" type="button">Сверху</button>
+          <button class="btn" id="v-reset" type="button">Исходный вид</button>
+        </div>
+      </div>
+      <div class="grp" id="g-replay" hidden>
+        <div class="row"><button class="btn" id="replay" type="button">Показать ещё раз</button></div>
+      </div>
+      <div class="grp" id="g-rot" hidden>
+        <h4>Поворот базиса внутри плоскости</h4>
+        <div class="ctl">
+          <label for="phi"><span>Угол поворота</span><output id="phi-o">0°</output></label>
+          <input type="range" id="phi" min="-180" max="180" step="1" value="0">
+        </div>
+        <div class="row">
+          <button class="btn primary" id="pca" type="button">Главные оси (как в черновике)</button>
+          <button class="btn" id="phi0" type="button">Исходный базис</button>
+        </div>
+      </div>
+      <div class="grp" id="g-fit" hidden>
+        <h4>Поиск подпространства</h4>
+        <div class="ctl">
+          <label><span>Число индексов <span class="m">m</span></span></label>
+          <div class="seg" id="mseg" role="group" aria-label="Число индексов">
+            <button type="button" data-m="1" aria-pressed="false">1</button>
+            <button type="button" data-m="2" aria-pressed="true">2</button>
+            <button type="button" data-m="3" aria-pressed="false">3</button>
+            <button type="button" data-m="4" aria-pressed="false">4</button>
+          </div>
+        </div>
+      </div>
+      <div class="grp" id="g-noise" hidden>
+        <h4>Шум и объём данных</h4>
+        <div class="ctl">
+          <label for="sig"><span>Шум <span class="m">σ</span></span><output id="sig-o">1.0</output></label>
+          <input type="range" id="sig" min="0" max="4" step="0.1" value="1">
+        </div>
+        <div class="ctl">
+          <label for="tt"><span>Наблюдений на магазин <span class="m">T</span></span><output id="tt-o">300</output></label>
+          <input type="range" id="tt" min="0" max="6" step="1" value="3">
+        </div>
+        <div class="row"><button class="btn" id="reseed" type="button">Новые данные</button></div>
+      </div>
+      <div class="grp"><dl class="ro" id="readout"></dl></div>
+    </aside>
+  </section>
+
+  <div class="pager">
+    <button class="btn" id="prev" type="button">← Назад</button>
+    <span class="pos" id="pos">1 / 5</span>
+    <button class="btn primary" id="next" type="button">Дальше →</button>
+  </div>
+
+  <p class="foot">Данные синтетические: 12 магазинов, 100 признаков, истинное число индексов — два. Образцы β<sub>1</sub>, β<sub>2</sub> (плавные профили) и нагрузки ℓ<sub>i</sub> заданы вручную, признаки и шум гауссовские. Наклоны каждого магазина оценены обычной регрессией по его T наблюдениям.</p>
+</div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const N = 12, D = 100, TMAX = 1000, TLIST = [120, 150, 200, 300, 500, 700, 1000];
+const L0 = [[1.6, 0.3], [1.2, 0.9], [0.9, -0.5], [1.8, -0.2], [0.4, 1.3], [1.1, 0.2],
+            [-0.8, 0.5], [0.6, 1.6], [1.4, 0.7], [0.3, -1.0], [1.0, 1.1], [2.0, 0.5]];
+
+/* ---------- векторы ---------- */
+const dotN = (a, b) => { let s = 0; for (let j = 0; j < a.length; j++) s += a[j] * b[j]; return s; };
+const nrmN = a => Math.sqrt(dotN(a, a));
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sc3 = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const lerp3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+
+// образцы: β₁ — плавный «горб», β₂ — одна «волна»; на сетке 1..100 они точно ортогональны
+const prof = k => { const v = new Float64Array(D); for (let j = 0; j < D; j++) v[j] = Math.sin(Math.PI * k * (j + 1) / (D + 1)); const n = nrmN(v); for (let j = 0; j < D; j++) v[j] /= n; return v; };
+const B1 = prof(1), B2 = prof(2);
+const BT = L0.map(l => { const v = new Float64Array(D); for (let j = 0; j < D; j++) v[j] = l[0] * B1[j] + l[1] * B2[j]; return v; });
+const PSI = (() => { let g11 = 0, g12 = 0, g22 = 0; for (const l of L0) { g11 += l[0] * l[0]; g12 += l[0] * l[1]; g22 += l[1] * l[1]; } return 0.5 * Math.atan2(2 * g12, g11 - g22) * 180 / Math.PI; })();
+
+function eigSym(A) { // Якоби для небольшой симметричной матрицы
+  const n = A.length, a = A.map(r => r.slice()), V = A.map((_, i) => A.map((__, j) => +(i === j)));
+  for (let sw = 0; sw < 60; sw++) {
+    let off = 0; for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) off += a[p][q] * a[p][q];
+    if (off < 1e-26) break;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
+      if (Math.abs(a[p][q]) < 1e-300) continue;
+      const th = 0.5 * Math.atan2(2 * a[p][q], a[q][q] - a[p][p]), c = Math.cos(th), s = Math.sin(th);
+      for (let k = 0; k < n; k++) { const x = a[k][p], y = a[k][q]; a[k][p] = c * x - s * y; a[k][q] = s * x + c * y; }
+      for (let k = 0; k < n; k++) { const x = a[p][k], y = a[q][k]; a[p][k] = c * x - s * y; a[q][k] = s * x + c * y; }
+      for (let k = 0; k < n; k++) { const x = V[k][p], y = V[k][q]; V[k][p] = c * x - s * y; V[k][q] = s * x + c * y; }
+    }
+  }
+  return a.map((_, k) => ({ val: Math.max(0, a[k][k]), vec: V.map(r => r[k]) })).sort((u, v) => v.val - u.val);
+}
+function cholSolve(W, g) { // W — D×D, положительно определённая
+  const L = new Float64Array(D * D);
+  for (let i = 0; i < D; i++) for (let j = 0; j <= i; j++) {
+    let s = W[i * D + j]; for (let k = 0; k < j; k++) s -= L[i * D + k] * L[j * D + k];
+    L[i * D + j] = i === j ? Math.sqrt(Math.max(s, 1e-12)) : s / L[j * D + j];
+  }
+  const y = new Float64Array(D), x = new Float64Array(D);
+  for (let i = 0; i < D; i++) { let s = g[i]; for (let k = 0; k < i; k++) s -= L[i * D + k] * y[k]; y[i] = s / L[i * D + i]; }
+  for (let i = D - 1; i >= 0; i--) { let s = y[i]; for (let k = i + 1; k < D; k++) s -= L[k * D + i] * x[k]; x[i] = s / L[i * D + i]; }
+  return x;
+}
+
+/* ---------- данные ---------- */
+function rng(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function genRaw(seed) {
+  const r = rng(seed * 7919 + 3);
+  const nr = () => { let u = 0; while (u === 0) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); };
+  const X = new Float64Array(N * TMAX * D), U = new Float64Array(N * TMAX);
+  for (let i = 0; i < X.length; i++) X[i] = nr();
+  for (let i = 0; i < U.length; i++) U[i] = nr();
+  return { X, U };
+}
+const S = { step: 1, sigma: 1, T: 300, seed: 1, phi: 0, m: 2, hl: null, sel: 1, yaw: 35, pitch: 22 };
+let raw = genRaw(S.seed), noise = null, data = null;
+
+// Ошибка МНК при σ = 1: e_i = (X̃ᵀX̃)⁻¹X̃ᵀũ (X̃, ũ — центрированные). Оценка: b̂_i = b_i + σ·e_i.
+function computeNoise() {
+  const T = S.T, out = [];
+  for (let i = 0; i < N; i++) {
+    const s = new Float64Array(D), sxu = new Float64Array(D), sxx = new Float64Array(D * D); let su = 0;
+    for (let t = 0; t < T; t++) {
+      const off = (i * TMAX + t) * D, ut = raw.U[i * TMAX + t]; su += ut;
+      for (let j = 0; j < D; j++) {
+        const xj = raw.X[off + j]; s[j] += xj; sxu[j] += xj * ut;
+        const row = j * D; for (let k = j; k < D; k++) sxx[row + k] += xj * raw.X[off + k];
+      }
+    }
+    const W = new Float64Array(D * D), g = new Float64Array(D);
+    for (let j = 0; j < D; j++) { g[j] = sxu[j] - s[j] * su / T; for (let k = j; k < D; k++) { const v = sxx[j * D + k] - s[j] * s[k] / T; W[j * D + k] = v; W[k * D + j] = v; } }
+    out.push(cholSolve(W, g));
+  }
+  return out;
+}
+function derive() {
+  const bh = BT.map((b, i) => { const v = new Float64Array(D); for (let j = 0; j < D; j++) v[j] = b[j] + S.sigma * noise[i][j]; return v; });
+  // проекция для шага 2: (β₁, β₂, w), w — направление, где оценки сильнее всего отходят от плоскости
+  const r = bh.map(b => { const a1 = dotN(b, B1), a2 = dotN(b, B2), v = new Float64Array(D); for (let j = 0; j < D; j++) v[j] = b[j] - a1 * B1[j] - a2 * B2[j]; return v; });
+  const offN = r.map(nrmN), offMean = offN.reduce((p, q) => p + q, 0) / N;
+  const G = r.map(a => r.map(b => dotN(a, b))), top = eigSym(G)[0];
+  let w = new Float64Array(D); for (let i = 0; i < N; i++) for (let j = 0; j < D; j++) w[j] += top.vec[i] * r[i][j];
+  const wn = nrmN(w) || 1; for (let j = 0; j < D; j++) w[j] /= wn;
+  const c2est = bh.map(b => [dotN(b, B1), dotN(b, B2), dotN(b, w)]);
+  // SVD матрицы B̂ (12×100) через матрицу Грама 12×12
+  const K = bh.map(a => bh.map(b => dotN(a, b))), eg = eigSym(K);
+  const sv = eg.map(e => Math.sqrt(e.val)), tot = eg.reduce((p, e) => p + e.val, 0) || 1;
+  const V = eg.slice(0, 4).map((e, k) => { const v = new Float64Array(D); if (sv[k] > 1e-12) for (let i = 0; i < N; i++) for (let j = 0; j < D; j++) v[j] += e.vec[i] * bh[i][j] / sv[k]; return v; });
+  const c5 = bh.map((_, i) => [0, 1, 2].map(k => sv[k] * eg[k].vec[i]));
+  // угол между истинной и найденной плоскостью (наибольший главный угол)
+  const C = [[dotN(B1, V[0]), dotN(B1, V[1])], [dotN(B2, V[0]), dotN(B2, V[1])]];
+  const CtC = [[C[0][0] ** 2 + C[1][0] ** 2, C[0][0] * C[0][1] + C[1][0] * C[1][1]], [0, C[0][1] ** 2 + C[1][1] ** 2]]; CtC[1][0] = CtC[0][1];
+  const minSv = Math.sqrt(Math.max(0, eigSym(CtC)[1].val));
+  const ang = Math.acos(Math.min(1, minSv)) * 180 / Math.PI;
+  // истинная плоскость в координатах (v₁, v₂, v₃)
+  let t1 = [0, 1, 2].map(k => dotN(B1, V[k])), t2 = [0, 1, 2].map(k => dotN(B2, V[k]));
+  const n1 = Math.sqrt(dot3(t1, t1)) || 1; t1 = sc3(t1, 1 / n1);
+  t2 = add3(t2, sc3(t1, -dot3(t2, t1))); const n2 = Math.sqrt(dot3(t2, t2)) || 1; t2 = sc3(t2, 1 / n2);
+  return { bh, c2est, offMean, sv, tot, eg, c5, ang, t1, t2 };
+}
+
+/* ---------- 3D-проекция и камера ---------- */
+const PS = 58, CX = 200, CY = 210;
+function proj(p) {
+  const th = S.yaw * Math.PI / 180, ph = S.pitch * Math.PI / 180;
+  const x1 = p[0] * Math.cos(th) - p[1] * Math.sin(th);
+  const y1 = p[0] * Math.sin(th) + p[1] * Math.cos(th);
+  const y2 = y1 * Math.cos(ph) - p[2] * Math.sin(ph);
+  const z2 = y1 * Math.sin(ph) + p[2] * Math.cos(ph);
+  return [CX + PS * x1, CY - PS * z2, y2];
+}
+const wrap180 = a => ((a + 180) % 360 + 360) % 360 - 180;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let camRaf = 0;
+function animCam(to) {
+  cancelAnimationFrame(camRaf);
+  const fy = S.yaw, fp = S.pitch, dy = wrap180(to.yaw - fy), dp = to.pitch - fp;
+  if (reduce) { S.yaw = fy + dy; S.pitch = to.pitch; renderRight(); return; }
+  const t0 = performance.now();
+  const tick = now => { const p = Math.min(1, (now - t0) / 900), k = ease(p); S.yaw = fy + dy * k; S.pitch = fp + dp * k; renderRight(); if (p < 1) camRaf = requestAnimationFrame(tick); };
+  camRaf = requestAnimationFrame(tick);
+}
+
+/* ---------- утилиты ---------- */
+const fmt = (v, d = 1) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+function arrow(x0, y0, x1, y1, cls, hw, extra = '') {
+  const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
+  if (L < 0.5) return '';
+  const ux = dx / L, uy = dy / L, h = Math.min(hw * 2.6, L * 0.55);
+  const bx = x1 - ux * h, by = y1 - uy * h, px = -uy * hw, py = ux * hw;
+  return `<g class="${cls}" ${extra}><line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}"/>` +
+    `<polygon points="${x1.toFixed(1)},${y1.toFixed(1)} ${(bx + px).toFixed(1)},${(by + py).toFixed(1)} ${(bx - px).toFixed(1)},${(by - py).toFixed(1)}"/></g>`;
+}
+const seg3 = (a, b, cls, extra = '') => { const p = proj(a), q = proj(b); return `<line class="${cls}" x1="${p[0].toFixed(1)}" y1="${p[1].toFixed(1)}" x2="${q[0].toFixed(1)}" y2="${q[1].toFixed(1)}" ${extra}/>`; };
+const poly3 = (pts, cls) => `<polygon class="${cls}" points="${pts.map(p => { const q = proj(p); return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join(' ')}"/>`;
+function planePatch(u, v, L, cls, gridCls) {
+  let s = poly3([add3(sc3(u, L), sc3(v, L)), add3(sc3(u, -L), sc3(v, L)), add3(sc3(u, -L), sc3(v, -L)), add3(sc3(u, L), sc3(v, -L))], cls);
+  if (gridCls) for (let t = -L + L / 3; t < L - 1e-9; t += L / 3) {
+    s += seg3(add3(sc3(u, t), sc3(v, -L)), add3(sc3(u, t), sc3(v, L)), gridCls);
+    s += seg3(add3(sc3(v, t), sc3(u, -L)), add3(sc3(v, t), sc3(u, L)), gridCls);
+  }
+  return s;
+}
+function basisNow() {
+  const r = S.phi * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+  const b1 = new Float64Array(D), b2 = new Float64Array(D);
+  for (let j = 0; j < D; j++) { b1[j] = c * B1[j] + s * B2[j]; b2[j] = -s * B1[j] + c * B2[j]; }
+  return { b1, b2, R: [[c, s], [-s, c]] };
+}
+const loadNow = (i, R) => [R[0][0] * L0[i][0] + R[0][1] * L0[i][1], R[1][0] * L0[i][0] + R[1][1] * L0[i][1]];
+const polyline = (v, x0, x1, y0, ys, cls, extra = '') => {
+  let p = ''; for (let j = 0; j < D; j++) p += (j ? ' ' : '') + (x0 + (x1 - x0) * j / (D - 1)).toFixed(1) + ',' + (y0 - clamp(v[j] * ys, -1e4, 1e4)).toFixed(1);
+  return `<polyline class="${cls}" points="${p}" ${extra}/>`;
+};
+
+/* ---------- правая панель ---------- */
+const anim = { k: 1, raf: 0 };
+function axes3(labels) {
+  let s = '';
+  for (let k = 0; k < 3; k++) {
+    const e = [0, 0, 0]; e[k] = 1;
+    s += seg3([0, 0, 0], sc3(e, -2.6), 'axis neg') + seg3([0, 0, 0], sc3(e, 2.6), 'axis');
+    const p = proj(sc3(e, 2.95));
+    s += `<text class="axl3" x="${p[0].toFixed(1)}" y="${(p[1] + 4).toFixed(1)}" text-anchor="middle">${labels[k]}</text>`;
+  }
+  return s;
+}
+function arrows3(pts, cls, hw = 4, styleFn = () => '', labels = true) {
+  const o = proj([0, 0, 0]);
+  const items = pts.map((p, i) => ({ i, p, q: proj(p) })).sort((a, b) => b.q[2] - a.q[2]);
+  let s = '';
+  for (const it of items) {
+    const op = clamp(0.65 + 0.35 * (-it.q[2] / 2.5), 0.4, 1);
+    s += arrow(o[0], o[1], it.q[0], it.q[1], cls, hw, `data-i="${it.i}" style="opacity:${op.toFixed(2)};${styleFn(it.i)}"`);
+    if (labels) {
+      const dx = it.q[0] - o[0], dy = it.q[1] - o[1], L = Math.hypot(dx, dy) || 1;
+      s += `<text class="tipl" data-i="${it.i}" x="${(it.q[0] + dx / L * 10).toFixed(1)}" y="${(it.q[1] + dy / L * 10 + 4).toFixed(1)}" text-anchor="middle">${it.i + 1}</text>`;
+    }
+  }
+  return s;
+}
+function heatmap() {
+  const bh = data.bh, x0 = 44, x1 = 392, y0 = 22, rh = 28, cw = (x1 - x0) / D, vmax = 0.38;
+  let s = `<rect class="plotbg" x="0" y="0" width="400" height="400"/>`;
+  for (let i = 0; i < N; i++) {
+    s += `<g data-i="${i}">`;
+    for (let j = 0; j < D; j++) {
+      const v = clamp(bh[i][j] / vmax, -1, 1), pct = Math.round(Math.abs(v) * 100);
+      s += `<rect x="${(x0 + j * cw).toFixed(2)}" y="${y0 + i * rh}" width="${(cw + 0.35).toFixed(2)}" height="${rh - 2}" style="fill:color-mix(in oklab,var(${v >= 0 ? '--hpos' : '--hneg'}) ${pct}%,var(--plot))"/>`;
+    }
+    s += `<text class="rowl" x="${x0 - 6}" y="${y0 + i * rh + rh / 2 + 3}" text-anchor="end">М${i + 1}</text></g>`;
+  }
+  const yb = y0 + N * rh + 8;
+  for (const j of [1, 25, 50, 75, 100]) s += `<text class="tick" x="${(x0 + (j - 0.5) * cw).toFixed(1)}" y="${yb + 8}" text-anchor="middle">${j}</text>`;
+  s += `<text class="axl" x="${(x0 + x1) / 2}" y="${yb + 26}" text-anchor="middle">номер признака</text>`;
+  return s;
+}
+function profilesChart() {
+  const { b1, b2, R } = basisNow(), i = S.hl ?? S.sel, l = loadNow(i, R);
+  const x0 = 26, x1 = 390;
+  let s = `<rect class="plotbg" x="0" y="0" width="400" height="400"/>`;
+  // верх: образцы
+  const ya = 108, ysa = 330;
+  s += `<text class="ttl" x="${x0}" y="22">Образцы реакции: <tspan style="fill:var(--accent)">β₁</tspan> и <tspan style="fill:var(--accent2)">β₂</tspan></text>`;
+  s += `<line class="zero" x1="${x0}" y1="${ya}" x2="${x1}" y2="${ya}"/>`;
+  s += polyline(b1, x0, x1, ya, ysa, 'cb1') + polyline(b2, x0, x1, ya, ysa, 'cb2');
+  // низ: магазин
+  const yb = 300, ysb = 230;
+  s += `<text class="ttl" x="${x0}" y="208">Магазин ${i + 1}: b = <tspan style="fill:var(--accent)">${fmt(l[0], 2)}·β₁</tspan> + <tspan style="fill:var(--accent2)">${fmt(l[1], 2)}·β₂</tspan></text>`;
+  s += `<line class="zero" x1="${x0}" y1="${yb}" x2="${x1}" y2="${yb}"/>`;
+  const c1 = b1.map(v => v * l[0]), c2 = b2.map(v => v * l[1]);
+  s += polyline(c1, x0, x1, yb, ysb, 'cd1') + polyline(c2, x0, x1, yb, ysb, 'cd2') + polyline(BT[i], x0, x1, yb, ysb, 'csum');
+  for (const j of [1, 25, 50, 75, 100]) s += `<text class="tick" x="${(x0 + (x1 - x0) * (j - 1) / (D - 1)).toFixed(1)}" y="392" text-anchor="middle">${j}</text>`;
+  return s;
+}
+function renderRight() {
+  const st = S.step, svg = $('#right');
+  svg.classList.toggle('rot', st === 2 || st === 5);
+  let s = '';
+  if (st === 1) s = heatmap();
+  if (st === 3 || st === 4) s = profilesChart();
+  if (st === 2) {
+    const k = anim.k, tr = L0.map(l => [l[0], l[1], 0]);
+    s = `<rect class="plotbg" x="0" y="0" width="400" height="400"/>` + axes3(['β₁', 'β₂', 'поперёк плоскости']);
+    s += planePatch([1, 0, 0], [0, 1, 0], 2.1, 'plane', 'plgrid');
+    if (k > 0.02) s += arrows3(data.c2est, 'a-ghost', 3, () => '', false).replace(/opacity:([\d.]+)/g, (m, o) => `opacity:${(+o * 0.45).toFixed(2)}`);
+    const pts = data.c2est.map((p, i) => lerp3(p, tr[i], k));
+    s += arrows3(pts, 'a-mx', 4, () => `--c:color-mix(in oklab,var(--accent) ${(k * 100).toFixed(0)}%,var(--ink))`);
+  }
+  if (st === 5) {
+    const m = S.m;
+    s = `<rect class="plotbg" x="0" y="0" width="400" height="400"/>` + axes3(['v₁', 'v₂', 'v₃']);
+    s += `<g style="opacity:.5">${planePatch(data.t1, data.t2, 2.1, 'plane', null)}</g>`;
+    if (m === 1) s += seg3([-3, 0, 0], [3, 0, 0], 'fline');
+    if (m === 2) s += planePatch([1, 0, 0], [0, 1, 0], 2.1, 'fplane', null);
+    if (m <= 2) data.c5.forEach((p, i) => { const q = m === 1 ? [p[0], 0, 0] : [p[0], p[1], 0]; s += seg3(p, q, 'res', `data-i="${i}"`); });
+    s += arrows3(data.c5, 'a-ink');
+    if (m >= 3) s += `<text class="note3" x="200" y="390" text-anchor="middle">m = ${m}: подпространство включает и v₃ — на этой проекции остатков не видно</text>`;
+  }
+  svg.innerHTML = s;
+  applyHL();
+}
+
+/* ---------- левая панель ---------- */
+function renderCards() {
+  const k = S.step === 2 ? anim.k : 0;
+  $('#cards').innerHTML = data.bh.map((b, i) => {
+    const v = new Float64Array(D); for (let j = 0; j < D; j++) v[j] = b[j] + (BT[i][j] - b[j]) * k;
+    let s = `<svg viewBox="0 0 145 100" aria-hidden="true"><line class="zero" x1="6" y1="56" x2="139" y2="56"/>`;
+    if (S.step === 2 && k > 0.02) s += polyline(b, 6, 139, 56, 95, 'pr-ghost');
+    s += polyline(v, 6, 139, 56, 95, 'pr-est') + '</svg>';
+    const ell = S.step === 2 && k > 0.98 ? `<span class="ell">ℓ = (${fmt(L0[i][0], 1)}, ${fmt(L0[i][1], 1)})</span>` : '';
+    return `<button type="button" class="card" data-i="${i}" aria-label="Магазин ${i + 1}">${s}<span class="lab">М${i + 1}</span>${ell}</button>`;
+  }).join('');
+}
+const LS = 66;
+function loadPlot() {
+  const { R } = basisNow();
+  let s = `<rect class="plotbg" x="0" y="0" width="400" height="400"/>`;
+  for (let v = -2.5; v <= 2.51; v += 0.5) {
+    if (Math.abs(v) < 1e-9) continue;
+    const x = 200 + v * LS, y = 200 - v * LS;
+    if (x > 0 && x < 400) s += `<line class="grid" x1="${x}" y1="0" x2="${x}" y2="400"/>`;
+    if (y > 0 && y < 400) s += `<line class="grid" x1="0" y1="${y}" x2="400" y2="${y}"/>`;
+  }
+  s += `<line class="ax1" x1="10" y1="200" x2="390" y2="200"/><line class="ax2" x1="200" y1="10" x2="200" y2="390"/>`;
+  for (const v of [-2, -1, 1, 2]) s += `<text class="tick" x="${200 + v * LS}" y="214" text-anchor="middle">${fmt(v, 0)}</text><text class="tick" x="193" y="${200 - v * LS + 4}" text-anchor="end">${fmt(v, 0)}</text>`;
+  s += `<text class="ax1l" x="390" y="390" text-anchor="end">по горизонтали: ℓ₁, нагрузка на индекс 1</text><text class="ax2l" x="10" y="22">по вертикали: ℓ₂, нагрузка на индекс 2</text>`;
+  for (let i = 0; i < N; i++) {
+    const l = loadNow(i, R), x = 200 + l[0] * LS, y = 200 - l[1] * LS;
+    s += `<g data-i="${i}" style="cursor:pointer"><circle class="pt" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${i === (S.hl ?? S.sel) ? 7 : 5}"/><text class="ptl" x="${(x + 9).toFixed(1)}" y="${(y - 7).toFixed(1)}">${i + 1}</text></g>`;
+  }
+  return s;
+}
+function screePlot() {
+  const sv = data.sv, base = 330, H = 270, x0 = 40, w = 340 / N;
+  let s = `<rect class="plotbg" x="0" y="0" width="400" height="400"/>`;
+  s += `<line class="axis" x1="${x0}" y1="${base}" x2="384" y2="${base}"/>`;
+  for (let k = 0; k < N; k++) {
+    const h = Math.max(1.5, sv[k] / sv[0] * H), x = x0 + k * w + 3;
+    s += `<rect class="sbar${k < S.m ? '' : ' off'}" x="${x.toFixed(1)}" y="${(base - h).toFixed(1)}" width="${(w - 6).toFixed(1)}" height="${h.toFixed(1)}" rx="2"/>`;
+    s += `<text class="sval" x="${(x + (w - 6) / 2).toFixed(1)}" y="${(base - h - 6).toFixed(1)}" text-anchor="middle">${sv[k].toFixed(sv[k] < 10 ? 1 : 0)}</text>`;
+    s += `<text class="tick" x="${(x + (w - 6) / 2).toFixed(1)}" y="${base + 16}" text-anchor="middle">${k + 1}</text>`;
+  }
+  s += `<text class="axl" x="${x0}" y="38">сингулярные числа σ₁ ≥ σ₂ ≥ … ≥ σ₁₂</text>`;
+  s += `<text class="axl" x="212" y="${base + 38}" text-anchor="middle">номер направления</text>`;
+  return s;
+}
+function renderLeft() {
+  const st = S.step, side = $('#side2d'), cards = $('#cards');
+  if (st <= 2) {
+    cards.hidden = false; side.toggleAttribute('hidden', true); renderCards();
+    $('#leftTitle').textContent = st === 1 ? 'Реакции магазинов (оценки)' : 'Реакции магазинов: оценки → истина';
+    $('#leftHint').textContent = '100 наклонов, по одному на признак';
+  } else if (st <= 4) {
+    cards.hidden = true; side.toggleAttribute('hidden', false); side.innerHTML = loadPlot();
+    $('#leftTitle').textContent = 'Нагрузки магазинов';
+    $('#leftHint').textContent = 'координаты на плоскости; нажми на точку';
+  } else {
+    cards.hidden = true; side.toggleAttribute('hidden', false); side.innerHTML = screePlot();
+    $('#leftTitle').textContent = 'SVD матрицы наклонов 12 × 100';
+    $('#leftHint').textContent = `синие — первые m = ${S.m}`;
+  }
+}
+
+/* ---------- тексты ---------- */
+const M = s => `<span class="m">${s}</span>`;
+const STEPS = [
+  { nav: 'Реакции магазинов', title: 'Реакции магазинов',
+    rt: 'Все наклоны: магазины × признаки', rh: '',
+    formula: () => `Y<sub>it</sub> = c<sub>i</sub> + b<sub>i</sub><sup>⊤</sup>X<sub>it</sub> + u<sub>it</sub>, &nbsp; b<sub>i</sub> ∈ ℝ<sup>100</sup>`,
+    html: () => `<p>Теперь у каждого магазина 100 признаков, например цены и акции на 100 товаров. По каждому магазину строим отдельную регрессию. Его реакция — 100 наклонов, по одному на признак.</p>
+      <p>Стрелку в 100-мерном пространстве не нарисуешь, поэтому реакцию показываем <b>профилем</b>: слева у каждого магазина линия из 100 точек, высота точки — наклон по признаку. Справа все профили сложены в тепловую карту: строка — магазин, столбец — признак.</p>
+      <p>У каждого магазина 101 неизвестный параметр (уровень и 100 наклонов), поэтому наблюдений нужно больше, здесь ${M('T = ' + S.T)}. Профили шумные, и по ним трудно сказать, есть ли у магазинов что-то общее.</p>` },
+  { nav: 'Всё в одной плоскости', title: 'Всё лежит в одной плоскости',
+    rt: 'Проекция 100-мерного пространства на 3 направления', rh: 'перетащи, чтобы повернуть',
+    formula: () => `b<sub>i</sub> = ℓ<sub>i1</sub><span class="c1">β<sub>1</sub></span> + ℓ<sub>i2</sub><span class="c2">β<sub>2</sub></span>, &nbsp; β<sub>1</sub>, β<sub>2</sub> ∈ ℝ<sup>100</sup>`,
+    html: () => `<p>Многофакторная модель (в черновике — многоиндексная) утверждает, что реакция каждого магазина — комбинация двух общих векторов ${M('β<sub>1</sub>')} и ${M('β<sub>2</sub>')}. Слева шум уходит, и все 12 профилей оказываются смесями всего двух образцов с разными весами ${M('ℓ<sub>i</sub>')}.</p>
+      <p>Справа то же самое геометрически. Все комбинации двух векторов — <b>плоскость через ноль</b>, и в 100-мерном пространстве истинные стрелки лежат в ней. Нарисовать 100 измерений нельзя, поэтому показана проекция: две оси внутри плоскости и одна поперёк — та, вдоль которой оценки сильнее всего отходят от плоскости. Нажми «Сбоку на плоскость»: истинные стрелки ложатся на одну линию.</p>
+      <p>Однофакторная модель — частный случай с одним вектором ${M('β')}: плоскость вырождается в прямую. На языке матриц: матрица наклонов 12 × 100 имеет ранг 2.</p>` },
+  { nav: 'Два образца и нагрузки', title: 'Два образца и нагрузки',
+    rt: 'Как профиль магазина складывается из образцов', rh: '',
+    formula: () => `<span class="t">индексы</span> X<sub>it</sub><sup>⊤</sup><span class="c1">β<sub>1</sub></span>, X<sub>it</sub><sup>⊤</sup><span class="c2">β<sub>2</sub></span>; &nbsp; ℓ<sub>i</sub> = (ℓ<sub>i1</sub>, ℓ<sub>i2</sub>) <span class="t">— нагрузки</span>`,
+    html: () => `<p>Векторы ${M('β<sub>1</sub>')}, ${M('β<sub>2</sub>')} — два <b>образца реакции</b> по 100 чисел каждый (справа сверху). Каждый задаёт общий индекс — одну взвешенную сумму всех 100 признаков.</p>
+      <p>Нагрузки ${M('ℓ<sub>i1</sub>')}, ${M('ℓ<sub>i2</sub>')} показывают, насколько магазин реагирует на каждый индекс. Это его координаты на плоскости (слева). Наведи на магазин или нажми на него: справа снизу видно, как его профиль из 100 наклонов складывается из двух образцов с этими весами.</p>
+      <p>В этом выигрыш модели. Вместо 12 × 100 = 1200 отдельных наклонов оцениваются два образца по 100 чисел и по две нагрузки на магазин, всего 224. Каждый образец оценивается по данным всех магазинов сразу, поэтому точнее.</p>` },
+  { nav: 'Что можно узнать', title: 'Что можно узнать из данных',
+    rt: 'Образцы меняются, профиль магазина — нет', rh: '',
+    formula: () => `(<span class="c1">β<sub>1</sub></span>, <span class="c2">β<sub>2</sub></span>) → <span class="t">поворот,</span> &nbsp; ℓ<sub>i</sub> → <span class="t">тот же поворот,</span> &nbsp; b<sub>i</sub> <span class="t">не меняются</span>`,
+    html: () => `<p>Поверни базис ползунком. Образцы ${M('β<sub>1</sub>')}, ${M('β<sub>2</sub>')} меняют форму (поворачиваются внутри плоскости), нагрузки поворачиваются вместе с ними, а профиль каждого магазина — сплошная чёрная линия — остаётся тем же. Прогнозы не меняются, и по данным такие варианты не различить.</p>
+      <p>Значит, из данных определяется только <b>плоскость</b>, а не отдельные образцы. В однофакторной модели неизвестными были длина и знак ${M('β')}, здесь свободы больше: любой поворот и отражение базиса внутри плоскости.</p>
+      <p>Чтобы ответ был единственным, черновик берёт <b>главные оси</b>: первый образец — направление, вдоль которого реакции магазинов разбросаны сильнее всего, второй — перпендикулярный ему. Нажми «Главные оси».</p>` },
+  { nav: 'Поиск плоскости', title: 'Как найти плоскость по данным',
+    rt: 'Облако оценок в проекции на v₁, v₂, v₃', rh: 'перетащи, чтобы повернуть',
+    formula: () => `B̂ = [b̂<sub>1</sub>, …, b̂<sub>12</sub>]<sup>⊤</sup> = U Σ V<sup>⊤</sup>, &nbsp; σ<sub>1</sub> ≥ σ<sub>2</sub> ≥ … ≥ σ<sub>12</sub>`,
+    html: () => `<p>Собираем оценённые профили в матрицу 12 × 100 и делаем SVD. Сингулярные числа (слева) показывают, сколько разброса приходится на каждое направление. Два больших, а дальше ровный «пол» — значит, индексов два, а остальное шум.</p>
+      <p>Справа облако оценок в проекции на три главных направления ${M('v<sub>1</sub>')}, ${M('v<sub>2</sub>')}, ${M('v<sub>3</sub>')}. Найденная плоскость натянута на первые два, бледная — истинная. Попробуй ${M('m = 1')}: прямая не проходит через облако. При ${M('m = 3')} и ${M('m = 4')} модель начинает подгонять шум.</p>
+      <p>Увеличь ${M('σ')} или уменьши ${M('T')}: «пол» поднимается, и при сильном шуме второй индекс в нём тонет.</p>
+      <p>В черновике сначала ищут матрицу без требования ортонормированности, потом извлекают из неё базис главных осей, а число индексов наращивают: ${M('m = 1, 2, …')} до заданного максимума. SVD оценённых наклонов даёт для этой процедуры хорошую стартовую точку.</p>` },
+];
+const LEG = {
+  1: '<span><i class="sw heat"></i>наклон: отрицательный ↔ положительный</span>',
+  2: '<span><i class="sw pl"></i>общая плоскость</span><span><i class="sw" style="border-color:var(--accent)"></i>истинные стрелки</span><span><i class="sw" style="opacity:.45"></i>оценки</span>',
+  3: '<span><i class="sw b1"></i>β₁</span><span><i class="sw b2"></i>β₂</span><span><i class="sw"></i>профиль магазина</span><span><i class="sw d1"></i>ℓ₁β₁</span><span><i class="sw d2"></i>ℓ₂β₂</span>',
+  4: '<span><i class="sw b1"></i>β₁</span><span><i class="sw b2"></i>β₂</span><span><i class="sw"></i>профиль магазина</span><span><i class="sw d1"></i>ℓ₁β₁</span><span><i class="sw d2"></i>ℓ₂β₂</span>',
+  5: '<span><i class="sw fpl"></i>найденная плоскость</span><span><i class="sw fl"></i>прямая (m = 1)</span><span><i class="sw res"></i>остатки</span><span><i class="sw pl"></i>истинная плоскость</span>',
+};
+function renderNav() {
+  $('#steps').innerHTML = STEPS.map((x, i) => `<button type="button" data-step="${i + 1}" ${S.step === i + 1 ? 'aria-current="step"' : ''}><span class="n">${i + 1}</span>${x.nav}</button>`).join('');
+  $('#pos').textContent = `${S.step} / 5`;
+  $('#prev').disabled = S.step === 1; $('#next').disabled = S.step === 5;
+}
+function renderText() {
+  const x = STEPS[S.step - 1];
+  $('#text').innerHTML = `<h2>${x.title}</h2><div class="formula">${x.formula()}</div>${x.html()}`;
+  $('#legend').innerHTML = LEG[S.step];
+  $('#rightTitle').textContent = x.rt; $('#rightHint').textContent = x.rh;
+}
+function renderControls() {
+  $('#g-cam').hidden = !(S.step === 2 || S.step === 5);
+  $('#g-replay').hidden = S.step !== 2;
+  $('#g-rot').hidden = S.step !== 4;
+  $('#g-fit').hidden = S.step !== 5;
+  $('#g-noise').hidden = !(S.step === 1 || S.step === 2 || S.step === 5);
+  $('#phi-o').textContent = `${Math.round(S.phi)}°`;
+  $('#sig-o').textContent = S.sigma.toFixed(1); $('#tt-o').textContent = S.T;
+  document.querySelectorAll('#mseg button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.m === S.m)));
+}
+function renderReadout() {
+  const rows = [], st = S.step;
+  if (st === 1) rows.push(['Магазинов', N], ['Признаков', D], ['Наблюдений на магазин', S.T], ['Неизвестных на магазин', D + 1], ['Наклонов всего', N * D]);
+  if (st === 2) rows.push(['Среднее расстояние оценок до плоскости (по всем 98 поперечным направлениям)', data.offMean.toFixed(2)], ['То же для истинных стрелок', '0'], ['Ранг матрицы наклонов', 'оценки 12 → истина 2']);
+  if (st === 3 || st === 4) {
+    const { R } = basisNow(), i = S.hl ?? S.sel, l = loadNow(i, R);
+    rows.push([`Магазин ${i + 1}: нагрузки (ℓ₁, ℓ₂)`, `(${fmt(l[0], 2)}, ${fmt(l[1], 2)})`]);
+    rows.push(['Параметров без структуры', `${N} × ${D} = ${N * D}`], ['С двумя индексами', `2 × ${D} + ${N} × 2 = ${2 * D + 2 * N}`]);
+    if (st === 4) {
+      const { b1, b2 } = basisNow(); let dmax = 0;
+      for (let j = 0; j < N; j++) { const lj = loadNow(j, R); for (let k = 0; k < D; k++) dmax = Math.max(dmax, Math.abs(lj[0] * b1[k] + lj[1] * b2[k] - BT[j][k])); }
+      rows.push(['Изменение профилей и прогнозов', dmax < 1e-9 ? '0' : dmax.toExponential(1)]);
+    }
+  }
+  if (st === 5) {
+    const m = S.m, unexpl = data.eg.slice(m).reduce((p, e) => p + e.val, 0) / data.tot;
+    rows.push(['Число индексов m', m], ['Необъяснённая доля разброса', `${(unexpl * 100).toFixed(1)}%`]);
+    rows.push(['Угол между найденной и истинной плоскостью', m === 2 ? `<span class="good">${data.ang.toFixed(1)}°</span>` : '—']);
+    rows.push(['Истинное число индексов', '2']);
+  }
+  $('#readout').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
+}
+function applyHL() {
+  for (const box of [$('#cards'), $('#side2d'), $('#right')]) {
+    box.classList.toggle('has-hl', S.hl !== null && !(S.step === 3 || S.step === 4) || (S.hl !== null && box.id === 'side2d'));
+    box.querySelectorAll('[data-i]').forEach(e => e.classList.toggle('hl', +e.dataset.i === S.hl));
+  }
+}
+function renderFrame() { renderLeft(); renderRight(); }
+function render() { renderNav(); renderText(); renderControls(); renderFrame(); renderReadout(); }
+
+function play(dur, delay = 0) {
+  cancelAnimationFrame(anim.raf);
+  if (reduce) { anim.k = 1; renderFrame(); return; }
+  const t0 = performance.now(); anim.k = 0; renderFrame();
+  const tick = now => { const p = clamp((now - t0 - delay) / dur, 0, 1); anim.k = ease(p); renderFrame(); if (p < 1) anim.raf = requestAnimationFrame(tick); };
+  anim.raf = requestAnimationFrame(tick);
+}
+function goStep(n) {
+  n = clamp(n, 1, 5); if (n === S.step) return;
+  cancelAnimationFrame(anim.raf); S.step = n; S.hl = null; anim.k = 1; render();
+  if (n === 2) play(1400, 500);
+}
+function refresh() { data = derive(); renderText(); renderControls(); renderFrame(); renderReadout(); }
+
+/* ---------- события ---------- */
+$('#steps').addEventListener('click', e => { const b = e.target.closest('[data-step]'); if (b) goStep(+b.dataset.step); });
+$('#prev').addEventListener('click', () => goStep(S.step - 1));
+$('#next').addEventListener('click', () => goStep(S.step + 1));
+$('#replay').addEventListener('click', () => play(1400, 400));
+$('#v-edge').addEventListener('click', () => animCam({ yaw: S.yaw, pitch: 0 }));
+$('#v-face').addEventListener('click', () => animCam({ yaw: S.yaw, pitch: 85 }));
+$('#v-reset').addEventListener('click', () => animCam({ yaw: 35, pitch: 22 }));
+let drag = null;
+for (const box of ['#cards', '#side2d', '#right']) {
+  $(box).addEventListener('pointerover', e => {
+    if (drag) return;
+    const t = e.target.closest('[data-i]'); const v = t ? +t.dataset.i : null;
+    if (v !== S.hl) { S.hl = v; if (S.step === 3 || S.step === 4) { renderFrame(); renderReadout(); } else applyHL(); }
+  });
+  $(box).addEventListener('pointerleave', () => { if (S.hl !== null && !drag) { S.hl = null; if (S.step === 3 || S.step === 4) { renderFrame(); renderReadout(); } else applyHL(); } });
+}
+$('#side2d').addEventListener('click', e => { const t = e.target.closest('[data-i]'); if (t && (S.step === 3 || S.step === 4)) { S.sel = +t.dataset.i; renderFrame(); renderReadout(); } });
+const rsvg = $('#right');
+rsvg.addEventListener('pointerdown', e => { if (!rsvg.classList.contains('rot')) return; drag = { x: e.clientX, y: e.clientY }; rsvg.setPointerCapture(e.pointerId); rsvg.classList.add('dragging'); cancelAnimationFrame(camRaf); });
+rsvg.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const k = 360 / Math.max(260, rsvg.getBoundingClientRect().width) * 0.9;
+  S.yaw += (e.clientX - drag.x) * k; S.pitch = clamp(S.pitch + (e.clientY - drag.y) * k, -85, 85);
+  drag = { x: e.clientX, y: e.clientY }; renderRight();
+});
+const endDrag = () => { drag = null; rsvg.classList.remove('dragging'); };
+rsvg.addEventListener('pointerup', endDrag); rsvg.addEventListener('pointercancel', endDrag);
+
+$('#phi').addEventListener('input', e => { S.phi = +e.target.value; renderControls(); renderFrame(); renderReadout(); });
+function animPhi(to) {
+  const from = S.phi, d = wrap180(to - from);
+  const set = v => { S.phi = wrap180(v); $('#phi').value = S.phi; renderControls(); renderFrame(); renderReadout(); };
+  if (reduce) { set(from + d); return; }
+  const t0 = performance.now();
+  const tick = now => { const p = Math.min(1, (now - t0) / 800); set(from + d * ease(p)); if (p < 1) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}
+$('#pca').addEventListener('click', () => animPhi(PSI));
+$('#phi0').addEventListener('click', () => animPhi(0));
+$('#mseg').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (b) { S.m = +b.dataset.m; renderControls(); renderFrame(); renderReadout(); } });
+let pending = 0;
+$('#sig').addEventListener('input', e => { S.sigma = +e.target.value; cancelAnimationFrame(pending); pending = requestAnimationFrame(refresh); });
+$('#tt').addEventListener('input', e => { S.T = TLIST[+e.target.value]; $('#tt-o').textContent = S.T; });
+$('#tt').addEventListener('change', () => { noise = computeNoise(); refresh(); });
+$('#reseed').addEventListener('click', () => { S.seed += 1; raw = genRaw(S.seed); noise = computeNoise(); refresh(); });
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea')) return;
+  if (e.key === 'ArrowRight') goStep(S.step + 1);
+  if (e.key === 'ArrowLeft') goStep(S.step - 1);
+});
+
+noise = computeNoise(); data = derive(); render();
+})();
+</script>
+</body>
+</html>
