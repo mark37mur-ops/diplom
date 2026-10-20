@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Интерактивная визуализация однофакторной модели панельных данных">
+<title>Одна стрелка на всех</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=STIX+Two+Text:ital,wght@0,500;0,600;1,400;1,600&display=swap">
+<style>
+/* Layout: заголовок → вкладки шагов → сцена (магазины | плоскость наклонов) → текст шага + управление → листалка */
+:root{
+  --paper:#eef2f4; --panel:#fafbfc; --plot:#f6f8f9; --ink:#14202b; --muted:#566573;
+  --rule:#d2dbe2; --grid:#e1e8ed; --axis:#a3b1bc;
+  --accent:#bf3a20; --est:#1d5fbf; --lo:#d9e6f0; --hi:#0c3a69;
+  --f-head:"STIX Two Text","Cambria",Georgia,serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-math:"STIX Two Text","Cambria Math","Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0e1317; --panel:#141b21; --plot:#11181d; --ink:#e3eaef; --muted:#8e9eab;
+  --rule:#26313a; --grid:#1d2830; --axis:#465661;
+  --accent:#ff7a5a; --est:#6aa8ff; --lo:#1a3145; --hi:#a6d2ff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0e1317; --panel:#141b21; --plot:#11181d; --ink:#e3eaef; --muted:#8e9eab;
+  --rule:#26313a; --grid:#1d2830; --axis:#465661;
+  --accent:#ff7a5a; --est:#6aa8ff; --lo:#1a3145; --hi:#a6d2ff; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font:16px/1.55 var(--f-body)}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:28px 40px}
+.eyebrow{font:500 12px/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+h1{font:600 clamp(32px,4.6vw,48px)/1.08 var(--f-head);margin:0 0 10px;letter-spacing:-.01em;text-wrap:balance}
+.lead{max-width:64ch;color:var(--muted);margin:0}
+
+.steps{display:flex;gap:6px;margin:24px 0 16px;overflow-x:auto;padding-bottom:4px}
+.steps button{flex:0 0 auto;display:flex;align-items:baseline;gap:8px;border:1px solid var(--rule);background:transparent;color:var(--muted);padding:8px 12px;border-radius:6px;font:500 14px/1.2 var(--f-body);cursor:pointer}
+.steps button .n{font:500 12px var(--f-mono)}
+.steps button:hover{color:var(--ink);border-color:var(--axis)}
+.steps button[aria-current="step"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);gap:16px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:14px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.ph{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px}
+.ph h3{margin:0;font:600 14px/1.3 var(--f-body)}
+.hint{font-size:13px;color:var(--muted)}
+
+.shops{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.shop{position:relative;padding:0;border:1px solid var(--rule);border-radius:4px;background:var(--plot);cursor:pointer;aspect-ratio:1;display:block;width:100%;max-width:100%;color:inherit;font:inherit;transition:opacity .15s}
+.shop svg{width:100%;height:100%;display:block}
+.shop .lab{position:absolute;left:6px;top:3px;font:500 12px var(--f-mono);color:var(--ink);pointer-events:none}
+.shop .ell{position:absolute;right:6px;bottom:3px;font:500 11.5px var(--f-mono);color:var(--accent);pointer-events:none;font-variant-numeric:tabular-nums}
+.shop.sel{outline:2px solid var(--ink);outline-offset:1px}
+.shops.cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+.card{border:1px solid var(--rule);border-radius:4px;padding:6px 7px;font:10.5px/1.35 var(--f-mono);min-width:0;display:grid;gap:5px;align-content:start;overflow-x:auto;background:var(--plot);transition:opacity .15s}
+.card .ch{font-weight:500;font-size:12px}
+.mrow{display:flex;gap:5px;align-items:center}
+.mrow .m{font-size:13px}
+.mat{border-collapse:collapse;border-left:1.5px solid var(--muted);border-right:1.5px solid var(--muted);font-variant-numeric:tabular-nums}
+.mat td{padding:0 3px;text-align:right;white-space:nowrap}
+
+#plane,#crit{width:100%;height:auto;display:block}
+.has-hl [data-i]:not(.hl){opacity:.25}
+.has-hl .shop.hl,.has-hl .card.hl{outline:2px solid var(--accent);outline-offset:1px}
+
+.lg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--muted)}
+.lg span{display:inline-flex;align-items:center;gap:5px}
+.sw{display:inline-block;width:18px;height:0;border-top:2.5px solid var(--ink)}
+.sw.true{border-color:var(--accent)}
+.sw.est{border-color:var(--est);border-top-style:dashed}
+.sw.cur{border-color:var(--est)}
+.sw.ramp{height:9px;border:0;background:linear-gradient(90deg,var(--lo),var(--hi));border-radius:2px}
+.sw.ell{width:16px;height:10px;border:1px solid color-mix(in oklab,var(--est) 55%,transparent);border-radius:50%;background:color-mix(in oklab,var(--est) 14%,transparent)}
+
+/* svg */
+.plotbg{fill:var(--plot)}
+.grid{stroke:var(--grid);stroke-width:1}
+.axis{stroke:var(--axis);stroke-width:1.2}
+.tick{fill:var(--muted);font:11px var(--f-mono)}
+.axl{fill:var(--muted);font:12.5px var(--f-body)}
+.a-est line{stroke:var(--ink);stroke-width:2}.a-est polygon{fill:var(--ink)}
+.a-ghost line{stroke:var(--muted);stroke-width:1.3;opacity:.5}.a-ghost polygon{fill:var(--muted);opacity:.5}
+.a-true line{stroke:var(--accent);stroke-width:2}.a-true polygon{fill:var(--accent)}
+.a-beta line{stroke:var(--accent);stroke-width:4.5}.a-beta polygon{fill:var(--accent)}
+.a-mx line{stroke:var(--c);stroke-width:2.2}.a-mx polygon{fill:var(--c)}
+.mini .a-est line,.mini .a-true line{stroke-width:2}
+.l-true{stroke:var(--accent);stroke-width:2.5}
+.l-est{stroke:var(--est);stroke-width:2.2;stroke-dasharray:8 5}
+.l-cur{stroke:var(--est);stroke-width:2.5}
+.res{stroke:var(--est);stroke-width:1.3;stroke-dasharray:3 3}
+.ellp{fill:color-mix(in oklab,var(--est) 13%,transparent);stroke:color-mix(in oklab,var(--est) 50%,transparent);stroke-width:1}
+.tipl{fill:var(--ink);font:500 11.5px var(--f-mono)}
+.unit{fill:none;stroke:var(--axis);stroke-dasharray:3 4}
+.blab{fill:var(--accent);font:italic 600 17px var(--f-math)}
+.zlab{fill:var(--ink);font:500 13px var(--f-mono)}
+.cpath{fill:none;stroke:var(--ink);stroke-width:2}
+.cmark{stroke:var(--est);stroke-width:2}
+.cdot{fill:var(--est)}
+.cmin{fill:var(--ink)}
+.ctrue{stroke:var(--accent);stroke-width:2}
+.ctl-t{fill:var(--accent);font:500 11px var(--f-body)}
+
+.explain{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
+.text{min-width:0;padding-inline:4px}
+.text h2{font:600 clamp(23px,2.6vw,28px)/1.2 var(--f-head);margin:0 0 12px;text-wrap:balance}
+.text p{margin:0 0 12px;max-width:66ch}
+.text b{font-weight:600}
+.formula{font-family:var(--f-math);font-style:italic;font-size:19px;padding:12px 14px;border-left:3px solid var(--accent);background:var(--panel);margin:4px 0 16px;overflow-x:auto;white-space:nowrap;max-width:66ch}
+.m{font-family:var(--f-math);font-style:italic;font-size:1.1em;white-space:nowrap}
+.t{font-family:var(--f-body);font-style:normal;font-size:.8em}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.grp{border:1px solid var(--rule);border-radius:8px;padding:12px 14px;background:var(--panel);display:grid;gap:12px}
+.grp h4{margin:0;font:500 11.5px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.ctl{display:grid;gap:4px}
+.ctl label{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.ctl output{font:500 13px var(--f-mono);font-variant-numeric:tabular-nums}
+.ctl small{color:var(--muted);font-size:12.5px;line-height:1.4}
+input[type=range]{width:100%;accent-color:var(--ink);margin:2px 0}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:500 14px var(--f-body);padding:8px 12px;border-radius:6px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+.btn:hover{background:color-mix(in oklab,var(--ink) 8%,transparent)}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.btn:disabled{opacity:.35;cursor:default}
+dl.ro{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;margin:0;font-size:14px}
+dl.ro dt{color:var(--muted)}
+dl.ro dd{margin:0;font:500 14px var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+dl.ro dd.good{color:var(--est)}
+dl.ro dd.full{grid-column:1/-1;text-align:left;font-size:13px;color:var(--ink)}
+.good{color:var(--est)}
+
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--rule)}
+.pager .pos{font:500 13px var(--f-mono);color:var(--muted)}
+.foot{margin-top:22px;font-size:13px;color:var(--muted);max-width:80ch}
+:focus-visible{outline:2px solid var(--est);outline-offset:2px}
+
+@media (max-width:860px){.stage,.explain{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:560px){
+  .wrap{padding-inline:16px;padding-block:20px 32px}
+  .shops.cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .shop .lab{font-size:10.5px;left:4px}.shop .ell{font-size:10px;right:4px}
+  .formula{font-size:17px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Панельные данные · раздел 1 · однофакторная модель</p>
+    <h1>Одна стрелка на всех</h1>
+    <p class="lead">Суть модели за пять шагов на игрушечных данных: восемь магазинов по-разному реагируют на скидку и рекламу, но устроена эта реакция у всех одинаково.</p>
+  </header>
+
+  <nav class="steps" id="steps" aria-label="Шаги"></nav>
+
+  <section class="stage">
+    <div class="panel" id="leftPanel">
+      <div class="ph"><h3 id="leftTitle">Магазины</h3><span class="hint" id="leftHint"></span></div>
+      <div class="shops" id="shops"></div>
+    </div>
+    <div class="panel" id="rightPanel">
+      <div class="ph"><h3 id="rightTitle">Плоскость наклонов</h3><div class="lg" id="legend"></div></div>
+      <svg id="plane" viewBox="0 0 400 400" role="img" aria-label="Плоскость наклонов"></svg>
+      <svg id="crit" viewBox="0 0 400 128" role="img" aria-label="Сумма отклонений в зависимости от угла прямой" hidden></svg>
+    </div>
+  </section>
+
+  <section class="explain">
+    <article class="text" id="text" aria-live="polite"></article>
+    <aside class="side">
+      <div class="grp" id="g-replay" hidden>
+        <div class="row"><button class="btn" id="replay" type="button">Показать ещё раз</button></div>
+      </div>
+      <div class="grp" id="g-scale" hidden>
+        <h4>Масштаб</h4>
+        <div class="ctl">
+          <label for="aa"><span>Множитель <span class="m">a</span></span><output id="aa-o">1.0</output></label>
+          <input type="range" id="aa" min="-2.5" max="2.5" step="0.1" value="1">
+          <small>β → aβ, ℓ<sub>i</sub> → ℓ<sub>i</sub>/a. Ноль пропущен: при a = 0 модель теряет смысл.</small>
+        </div>
+      </div>
+      <div class="grp" id="g-noise" hidden>
+        <h4>Шум и объём данных</h4>
+        <div class="ctl">
+          <label for="sig"><span>Шум <span class="m">σ</span></span><output id="sig-o">1.0</output></label>
+          <input type="range" id="sig" min="0" max="3" step="0.1" value="1">
+        </div>
+        <div class="ctl">
+          <label for="tt"><span>Недель на магазин <span class="m">T</span></span><output id="tt-o">30</output></label>
+          <input type="range" id="tt" min="0" max="10" step="1" value="6">
+        </div>
+        <div class="row"><button class="btn" id="reseed" type="button">Новые данные</button></div>
+      </div>
+      <div class="grp" id="g-angle" hidden>
+        <h4>Общая прямая</h4>
+        <div class="ctl">
+          <label for="ang">Угол прямой<output id="ang-o">80°</output></label>
+          <input type="range" id="ang" min="0" max="179.5" step="0.5" value="80">
+        </div>
+        <div class="row"><button class="btn primary" id="best" type="button">Найти лучший угол</button></div>
+      </div>
+      <div class="grp" id="g-ro"><dl class="ro" id="readout"></dl></div>
+    </aside>
+  </section>
+
+  <div class="pager">
+    <button class="btn" id="prev" type="button">← Назад</button>
+    <span class="pos" id="pos">1 / 5</span>
+    <button class="btn primary" id="next" type="button">Дальше →</button>
+  </div>
+
+  <p class="foot">Данные синтетические: истинное направление β — 35°, нагрузки ℓ<sub>i</sub> и уровни c<sub>i</sub> заданы вручную, шум гауссовский. Признаки показаны относительно среднего по магазину, в условных единицах.</p>
+</div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const N = 8, TMAX = 200, TLIST = [5, 6, 8, 10, 15, 20, 30, 50, 80, 120, 200];
+const L0 = [1.5, 1.1, 0.8, 1.8, 0.5, 1.3, -0.7, 0.35];
+const C0 = [5, 3, 7, 4, 6, 2, 5.5, 4.5];
+const PHI_DEG = 35, PHI = PHI_DEG * Math.PI / 180, BS = [Math.cos(PHI), Math.sin(PHI)];
+const S = { step: 1, sigma: 1, T: 30, a: 1, ang: 80, sel: 0, hl: null, seed: 1 };
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const anim = { k: 1, raf: 0 };
+
+/* ---------- данные ---------- */
+function rng(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function genRaw(seed) {
+  const r = rng(seed * 9973 + 17);
+  const nrm = () => { let u = 0; while (u === 0) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); };
+  const mu = [], e1 = [], e2 = [], u = [];
+  for (let i = 0; i < N; i++) {
+    mu.push([0.9 * nrm(), 0.9 * nrm()]);
+    const a = new Float64Array(TMAX), b = new Float64Array(TMAX), c = new Float64Array(TMAX);
+    for (let t = 0; t < TMAX; t++) { a[t] = nrm(); b[t] = nrm(); c[t] = nrm(); }
+    e1.push(a); e2.push(b); u.push(c);
+  }
+  return { mu, e1, e2, u };
+}
+let raw = genRaw(S.seed), data = null;
+
+function lineErr(d1, d2) { const d = ((d1 - d2) % 180 + 180) % 180; return Math.min(d, 180 - d); }
+function crit(shops, deg) {
+  const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r); let tot = 0;
+  for (const d of shops) {
+    const [w11, w12, w22] = d.W, [b1, b2] = d.b;
+    const uWu = w11 * c * c + 2 * w12 * c * s + w22 * s * s;
+    const uWb = (w11 * b1 + w12 * b2) * c + (w12 * b1 + w22 * b2) * s;
+    const bWb = w11 * b1 * b1 + 2 * w12 * b1 * b2 + w22 * b2 * b2;
+    tot += bWb - uWb * uWb / uWu;
+  }
+  return tot;
+}
+function loadOn(d, deg) {
+  const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+  const [w11, w12, w22] = d.W, [b1, b2] = d.b;
+  return ((w11 * b1 + w12 * b2) * c + (w12 * b1 + w22 * b2) * s) / (w11 * c * c + 2 * w12 * c * s + w22 * s * s);
+}
+function compute() {
+  const T = S.T, sg = S.sigma, shops = [];
+  for (let i = 0; i < N; i++) {
+    const mu = raw.mu[i], X1 = new Float64Array(T), X2 = new Float64Array(T), Y = new Float64Array(T);
+    let s1 = 0, s2 = 0, sy = 0, s11 = 0, s12 = 0, s22 = 0, s1y = 0, s2y = 0, syy = 0;
+    for (let t = 0; t < T; t++) {
+      const x1 = mu[0] + raw.e1[i][t], x2 = mu[1] + raw.e2[i][t];
+      const y = C0[i] + L0[i] * (x1 * BS[0] + x2 * BS[1]) + sg * raw.u[i][t];
+      X1[t] = x1; X2[t] = x2; Y[t] = y;
+      s1 += x1; s2 += x2; sy += y; s11 += x1 * x1; s12 += x1 * x2; s22 += x2 * x2; s1y += x1 * y; s2y += x2 * y; syy += y * y;
+    }
+    const w11 = s11 - s1 * s1 / T, w12 = s12 - s1 * s2 / T, w22 = s22 - s2 * s2 / T;
+    const q1 = s1y - s1 * sy / T, q2 = s2y - s2 * sy / T, det = w11 * w22 - w12 * w12;
+    const b = [(w22 * q1 - w12 * q2) / det, (w11 * q2 - w12 * q1) / det];
+    const rss = Math.max(0, syy - sy * sy / T - (b[0] * q1 + b[1] * q2)), v = rss / (T - 3);
+    shops.push({
+      X1, X2, Y, b, mu, W: [w11, w12, w22], cov: [v * w22 / det, -v * w12 / det, v * w11 / det],
+      G: [[T, s1, s2], [s1, s11, s12], [s2, s12, s22]], Z: [sy, s1y, s2y],
+      ym: sy / T, ysd: Math.sqrt(Math.max(1e-12, (syy - sy * sy / T) / T)),
+      bt: [L0[i] * BS[0], L0[i] * BS[1]]
+    });
+  }
+  const grid = []; for (let k = 0; k < 360; k++) grid.push(crit(shops, k * 0.5));
+  let km = 0; for (let k = 1; k < 360; k++) if (grid[k] < grid[km]) km = k;
+  const a0 = grid[(km + 359) % 360], a1 = grid[km], a2 = grid[(km + 1) % 360], den = a0 - 2 * a1 + a2;
+  const off = den > 1e-12 ? Math.max(-1, Math.min(1, 0.5 * (a0 - a2) / den)) : 0;
+  const best = (((km + off) * 0.5) % 180 + 180) % 180;
+  const single = shops.map(d => lineErr(Math.atan2(d.b[1], d.b[0]) * 180 / Math.PI, PHI_DEG));
+  return { shops, grid, best, errAll: lineErr(best, PHI_DEG), errOne: single.reduce((p, q) => p + q, 0) / N };
+}
+
+/* ---------- форматирование ---------- */
+const fmt = (v, d = 1) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+const fnum = v => Math.abs(v) >= 99.95 ? fmt(v, 0) : fmt(v, 1);
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+
+function arrow(x0, y0, x1, y1, cls, hw, extra = '') {
+  const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
+  if (L < 0.5) return '';
+  const ux = dx / L, uy = dy / L, h = Math.min(hw * 2.6, L * 0.55);
+  const bx = x1 - ux * h, by = y1 - uy * h, px = -uy * hw, py = ux * hw;
+  return `<g class="${cls}" ${extra}><line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}"/>` +
+    `<polygon points="${x1.toFixed(1)},${y1.toFixed(1)} ${(bx + px).toFixed(1)},${(by + py).toFixed(1)} ${(bx - px).toFixed(1)},${(by - py).toFixed(1)}"/></g>`;
+}
+const dotFill = (d, t) => { const z = (d.Y[t] - d.ym) / d.ysd; return `fill:color-mix(in oklab,var(--hi) ${clamp(50 + z * 24, 3, 97).toFixed(0)}%,var(--lo))`; };
+
+/* ---------- тексты шагов ---------- */
+const M = s => `<span class="m">${s}</span>`;
+const STEPS = [
+  { nav: 'Данные',
+    title: () => `Панель: 8 магазинов по ${S.T} недель`,
+    html: () => `<p>Панельные данные — это много объектов, и за каждым наблюдаем много моментов времени. Здесь объекты — магазины, моменты — недели. Каждую неделю у магазина известны два признака, скидка и реклама, и результат — выручка.</p>
+      <p><b>Как читать картинку.</b> Один квадрат — один магазин, одна точка — одна неделя. Положение точки показывает скидку и рекламу в эту неделю, цвет — выручку: чем темнее, тем выше обычного для этого магазина. Нажми на магазин, чтобы рассмотреть его справа.</p>
+      <p>Данные синтетические: мы сами задали правило, по которому они получены. Поэтому на следующих шагах оценки можно сверить с правдой.</p>`,
+    formula: () => `(X<sub>it</sub>, Y<sub>it</sub>), &nbsp; i = 1, …, 8 <span class="t">(магазин)</span>, &nbsp; t = 1, …, T <span class="t">(неделя)</span>, &nbsp; X<sub>it</sub> = <span class="t">(скидка, реклама)</span>` },
+  { nav: 'Каждый сам за себя',
+    title: () => 'Каждый магазин сам за себя',
+    html: () => `<p>Для каждого магазина отдельно строим обычную регрессию выручки на скидку и рекламу. Её двумерный наклон ${M('b̂<sub>i</sub>')} удобно рисовать стрелкой. Направление стрелки показывает, при каком сочетании скидки и рекламы выручка растёт быстрее всего, длина — насколько быстро. На квадратах слева стрелка смотрит в сторону тёмных точек.</p>
+      <p>Справа те же восемь стрелок собраны в одну плоскость с началом в нуле. Это <b>плоскость наклонов</b>: каждая её точка — возможная реакция магазина на скидку и рекламу.</p>
+      <p>Пока это похоже на беспорядок: стрелки разной длины и смотрят немного в разные стороны.</p>`,
+    formula: () => `Y<sub>it</sub> ≈ ĉ<sub>i</sub> + b̂<sub>i</sub><sup>⊤</sup>X<sub>it</sub> &nbsp;<span class="t">— отдельная регрессия для каждого i</span>` },
+  { nav: 'Одна стрелка',
+    title: () => 'На самом деле стрелка одна',
+    html: () => `<p>Модель утверждает, что у всех магазинов одна и та же стрелка ${M('β')}, только своей длины: ${M('b<sub>i</sub> = ℓ<sub>i</sub>β')}. Вектор ${M('β')} задаёт <b>общий индекс</b> ${M('X<sub>it</sub><sup>⊤</sup>β')} — фиксированную смесь скидки и рекламы. Магазины различаются только силой реакции на этот индекс (нагрузка ${M('ℓ<sub>i</sub>')}) и базовым уровнем выручки ${M('c<sub>i</sub>')}.</p>
+      <p>Нагрузка может быть отрицательной. Магазин 7 реагирует на индекс наоборот, ${M('ℓ<sub>7</sub> < 0')}, поэтому его стрелка развёрнута.</p>
+      <p>Значит, все истинные стрелки лежат на одной прямой через ноль. Разброс на шаге 2 — это шум: у каждого магазина всего ${S.T} недель. Цель модели — найти эту прямую, то есть направление ${M('β')}.</p>`,
+    formula: () => `Y<sub>it</sub> = c<sub>i</sub> + ℓ<sub>i</sub> · X<sub>it</sub><sup>⊤</sup>β + u<sub>it</sub>, &nbsp;&nbsp; b<sub>i</sub> = ℓ<sub>i</sub> β` },
+  { nav: 'Что можно узнать',
+    title: () => 'Что можно узнать из данных',
+    html: () => `<p><b>Масштаб.</b> Подвигай ${M('a')}. Вектор ${M('β')} растягивается или разворачивается, нагрузки делятся на ${M('a')}, а стрелки ${M('ℓ<sub>i</sub>β')} остаются на месте. Значит, не меняются и прогнозы, и данные их не различат. Из данных узнаётся только прямая, а длина и знак ${M('β')} — нет. Поэтому в черновике ${M('‖β‖ = 1')}, а знак выбирают соглашением.</p>
+      <p><b>Шум.</b> Увеличь ${M('σ')} или уменьши ${M('T')}. Стрелки отдельных магазинов разлетаются, и по одному магазину направление угадывается плохо. Синий пунктир — прямая, подобранная сразу по всем восьми (как — на шаге 5). Она ошибается заметно меньше: ошибки магазинов независимы и частично гасят друг друга.</p>`,
+    formula: () => `(β, ℓ<sub>i</sub>) → (aβ, ℓ<sub>i</sub>/a): &nbsp; ℓ<sub>i</sub>β <span class="t">не меняется</span>` },
+  { nav: 'Сжатие и общая прямая',
+    title: () => 'Сжатие и общая прямая',
+    html: () => `<p><b>Сжатие.</b> Чтобы посчитать регрессию магазина, все ${S.T} точек не нужны: хватает сумм по неделям, вектора ${M('Z<sub>i</sub>')} и матрицы ${M('Ĝ<sub>i</sub>')} (слева). Из них получаются и стрелка, и её неопределённость — эллипс справа. Так ${8 * S.T} наблюдений превращаются в восемь маленьких карточек, и для метода наименьших квадратов ничего не теряется.</p>
+      <p><b>Общая прямая.</b> Теперь задача — провести через ноль прямую так, чтобы стрелки лежали к ней как можно ближе. Расстояние меряем с учётом эллипсов: точно оценённый магазин (узкий эллипс) тянет прямую сильнее. Покрути угол и следи за суммой отклонений под картинкой. Её минимум и есть оценка направления ${M('β')}.</p>
+      <p><b>Что дальше в разделе 1.</b> В этой задаче случайные ${M('Ĝ<sub>i</sub>')} перемножаются с неизвестными параметрами, и теорию для такого критерия строить трудно. Раздел 1 переписывает её через двойников ${M('z<sub>i</sub>')}, ${M('A<sub>i</sub>')} («успокоение»), чтобы шум входил в критерий линейно, и добавляет штраф, который фиксирует масштаб ${M('β')}. Это §4–9 PDF-разбора.</p>`,
+    formula: () => `Z<sub>i</sub> = Σ<sub>t</sub> Y<sub>it</sub> (1, X<sub>it</sub>), &nbsp; Ĝ<sub>i</sub> = Σ<sub>t</sub> (1, X<sub>it</sub>)(1, X<sub>it</sub>)<sup>⊤</sup>, &nbsp; Ĝ<sub>i</sub> θ̂<sub>i</sub> = Z<sub>i</sub>` },
+];
+
+/* ---------- левая панель ---------- */
+function mini(d, i) {
+  const k = 14, ka = 17, st = S.step, r = S.T > 80 ? 1.5 : S.T > 30 ? 2 : 2.5;
+  let s = `<svg class="mini" viewBox="0 0 100 100" aria-hidden="true">`;
+  for (const v of [25, 50, 75]) s += `<line class="grid" x1="${v}" y1="0" x2="${v}" y2="100"/><line class="grid" x1="0" y1="${v}" x2="100" y2="${v}"/>`;
+  for (let t = 0; t < S.T; t++) {
+    const x = 50 + (d.X1[t] - d.mu[0]) * k, y = 50 - (d.X2[t] - d.mu[1]) * k;
+    s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" style="${dotFill(d, t)}"/>`;
+  }
+  if (st >= 2) {
+    const g = st === 2 ? clamp(anim.k * 1.5 - i * 0.06, 0, 1) : 1;
+    s += arrow(50, 50, 50 + d.b[0] * ka * g, 50 - d.b[1] * ka * g, 'a-est', 3.2);
+  }
+  if (st >= 3 && st <= 4) {
+    const op = st === 3 ? anim.k : 1;
+    s += arrow(50, 50, 50 + d.bt[0] * ka, 50 - d.bt[1] * ka, 'a-true', 3.2, `style="opacity:${op.toFixed(2)}"`);
+  }
+  s += `</svg>`;
+  let ell = '';
+  if (st === 3) ell = `ℓ = ${fmt(L0[i], 2)}`;
+  if (st === 4) ell = `ℓ = ${fmt(L0[i] / S.a, 2)}`;
+  return `<button type="button" class="shop${st === 1 && S.sel === i ? ' sel' : ''}" data-i="${i}" aria-label="Магазин ${i + 1}">${s}<span class="lab">М${i + 1}</span>${ell ? `<span class="ell">${ell}</span>` : ''}</button>`;
+}
+function card(d, i) {
+  const G = d.G, Z = d.Z, row = a => `<tr>${a.map(v => `<td>${fnum(v)}</td>`).join('')}</tr>`;
+  return `<div class="card" data-i="${i}"><div class="ch">М${i + 1}</div>
+    <div class="mrow"><span class="m">Z</span><table class="mat">${row(Z)}</table></div>
+    <div class="mrow"><span class="m">Ĝ</span><table class="mat">${row(G[0])}${row(G[1])}${row(G[2])}</table></div></div>`;
+}
+function renderLeft() {
+  const el = $('#shops');
+  if (S.step === 5) {
+    el.className = 'shops cards';
+    el.innerHTML = data.shops.map(card).join('');
+    $('#leftTitle').textContent = 'Сводки магазинов';
+    $('#leftHint').textContent = `${S.T} недель → 3 + 6 чисел на магазин`;
+  } else {
+    el.className = 'shops';
+    el.innerHTML = data.shops.map(mini).join('');
+    $('#leftTitle').textContent = 'Магазины: скидка × реклама';
+    $('#leftHint').textContent = S.step === 1 ? 'нажми, чтобы увеличить' : 'цвет — выручка';
+  }
+}
+
+/* ---------- правая панель ---------- */
+const PS = 170 / 2.4, P = (x, y) => [200 + x * PS, 200 - y * PS];
+function planeBase() {
+  let s = `<defs><clipPath id="clipP"><rect x="10" y="10" width="380" height="380"/></clipPath></defs><rect class="plotbg" x="10" y="10" width="380" height="380"/>`;
+  for (let v = -2.5; v <= 2.51; v += 0.5) {
+    if (Math.abs(v) < 1e-9) continue;
+    const [x] = P(v, 0), [, y] = P(0, v);
+    if (x > 10 && x < 390) s += `<line class="grid" x1="${x}" y1="10" x2="${x}" y2="390"/>`;
+    if (y > 10 && y < 390) s += `<line class="grid" x1="10" y1="${y}" x2="390" y2="${y}"/>`;
+  }
+  s += `<line class="axis" x1="10" y1="200" x2="390" y2="200"/><line class="axis" x1="200" y1="10" x2="200" y2="390"/>`;
+  for (const v of [-2, -1, 1, 2]) {
+    const [x] = P(v, 0), [, y] = P(0, v);
+    s += `<text class="tick" x="${x}" y="214" text-anchor="middle">${fmt(v, 0)}</text><text class="tick" x="193" y="${y + 4}" text-anchor="end">${fmt(v, 0)}</text>`;
+  }
+  s += `<text class="axl" x="382" y="380" text-anchor="end">горизонталь: наклон по скидке</text><text class="axl" x="18" y="28">вертикаль: наклон по рекламе</text>`;
+  return s;
+}
+function lineAt(deg, cls, extra = '') {
+  const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r), [x0, y0] = P(-4 * c, -4 * s), [x1, y1] = P(4 * c, 4 * s);
+  return `<line class="${cls}" x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" ${extra}/>`;
+}
+function tipLabel(i, bx, by) {
+  const L = Math.hypot(bx, by); const [x, y] = P(bx, by);
+  const ox = L > 0.05 ? bx / L * 11 : 8, oy = L > 0.05 ? -by / L * 11 : -8;
+  return `<text class="tipl" data-i="${i}" x="${(x + ox).toFixed(1)}" y="${(y + oy + 4).toFixed(1)}" text-anchor="middle">${i + 1}</text>`;
+}
+function ellipse(d, i) {
+  const [a, b, c] = d.cov, tr = (a + c) / 2, q = Math.sqrt(((a - c) / 2) ** 2 + b * b);
+  const l1 = Math.max(0, tr + q), l2 = Math.max(0, tr - q);
+  if (l1 < 1e-10) return '';
+  const th = 0.5 * Math.atan2(2 * b, a - c) * 180 / Math.PI, [x, y] = P(d.b[0], d.b[1]);
+  return `<ellipse class="ellp" data-i="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${(Math.sqrt(l1) * PS).toFixed(1)}" ry="${(Math.sqrt(l2) * PS).toFixed(1)}" transform="rotate(${(-th).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})"/>`;
+}
+function zoom() {
+  const i = S.sel, d = data.shops[i], k = 50;
+  let s = `<rect class="plotbg" x="10" y="10" width="380" height="380"/>`;
+  for (let v = -3; v <= 3; v++) {
+    if (v === 0) continue;
+    s += `<line class="grid" x1="${200 + v * k}" y1="10" x2="${200 + v * k}" y2="390"/><line class="grid" x1="10" y1="${200 + v * k}" x2="390" y2="${200 + v * k}"/>`;
+  }
+  s += `<line class="axis" x1="10" y1="200" x2="390" y2="200"/><line class="axis" x1="200" y1="10" x2="200" y2="390"/>`;
+  const r = S.T > 80 ? 3.5 : 5.5;
+  for (let t = 0; t < S.T; t++) {
+    const x = 200 + (d.X1[t] - d.mu[0]) * k, y = 200 - (d.X2[t] - d.mu[1]) * k;
+    s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" style="${dotFill(d, t)}"/>`;
+  }
+  s += `<text class="axl" x="382" y="226" text-anchor="end">больше скидка →</text><text class="axl" x="208" y="28">↑ больше реклама</text>`;
+  s += `<text class="zlab" x="20" y="382">Магазин ${i + 1}: ${S.T} точек, по одной на неделю</text>`;
+  return s;
+}
+function plane() {
+  const st = S.step, sh = data.shops; let s = planeBase() + `<g clip-path="url(#clipP)">`;
+  if (st === 2) {
+    sh.forEach((d, i) => {
+      const g = clamp(anim.k * 1.5 - i * 0.06, 0, 1), [x, y] = P(d.b[0] * g, d.b[1] * g);
+      s += arrow(200, 200, x, y, 'a-est', 4.5, `data-i="${i}"`);
+      if (g > 0.95) s += tipLabel(i, d.b[0], d.b[1]);
+    });
+  }
+  if (st === 3) {
+    const k = anim.k;
+    s += lineAt(PHI_DEG, 'l-true', `style="opacity:${k.toFixed(2)}"`);
+    sh.forEach((d, i) => {
+      if (k > 0.02) { const [gx, gy] = P(d.b[0], d.b[1]); s += arrow(200, 200, gx, gy, 'a-ghost', 3.5, `data-i="${i}"`); }
+      const bx = lerp(d.b[0], d.bt[0], k), by = lerp(d.b[1], d.bt[1], k), [x, y] = P(bx, by);
+      const col = `style="--c:color-mix(in oklab,var(--accent) ${(k * 100).toFixed(0)}%,var(--ink))"`;
+      s += arrow(200, 200, x, y, 'a-mx', 4.5, `data-i="${i}" ${col}`);
+      s += tipLabel(i, bx, by);
+    });
+    const [bx, by] = P(BS[0], BS[1]);
+    s += `<g style="opacity:${k.toFixed(2)}">${arrow(200, 200, bx, by, 'a-beta', 6)}<text class="blab" x="${bx - 6}" y="${by - 12}">β</text></g>`;
+  }
+  if (st === 4) {
+    const [cx, cy] = P(0, 0);
+    s += `<circle class="unit" cx="${cx}" cy="${cy}" r="${PS}"/>`;
+    s += lineAt(PHI_DEG, 'l-true', 'style="opacity:.55"') + lineAt(data.best, 'l-est');
+    sh.forEach((d, i) => { const [x, y] = P(d.b[0], d.b[1]); s += arrow(200, 200, x, y, 'a-est', 4.5, `data-i="${i}"`) + tipLabel(i, d.b[0], d.b[1]); });
+    const [bx, by] = P(S.a * BS[0], S.a * BS[1]), sgn = S.a >= 0 ? 1 : -1;
+    s += arrow(200, 200, bx, by, 'a-beta', 6) + `<text class="blab" x="${bx + sgn * 8}" y="${by - sgn * 10}" text-anchor="middle">β</text>`;
+  }
+  if (st === 5) {
+    s += lineAt(PHI_DEG, 'l-true', 'style="opacity:.4"');
+    sh.forEach((d, i) => { s += ellipse(d, i); });
+    s += lineAt(S.ang, 'l-cur');
+    const r = S.ang * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
+    sh.forEach((d, i) => {
+      const l = loadOn(d, S.ang), [x0, y0] = P(d.b[0], d.b[1]), [x1, y1] = P(l * c, l * sn);
+      s += `<line class="res" data-i="${i}" x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}"/>`;
+    });
+    sh.forEach((d, i) => { const [x, y] = P(d.b[0], d.b[1]); s += arrow(200, 200, x, y, 'a-est', 4.5, `data-i="${i}"`) + tipLabel(i, d.b[0], d.b[1]); });
+  }
+  return s + `</g>`;
+}
+function critChart() {
+  const g = data.grid, mn = Math.min(...g), mx = Math.max(...g), span = Math.max(mx - mn, 1e-12);
+  const X = deg => 40 + deg / 180 * 332, Y = v => 22 + (1 - (v - mn) / span) * 76;
+  let s = `<text class="axl" x="40" y="13">сумма отклонений (ниже — лучше)</text>`;
+  s += `<line class="axis" x1="40" y1="98" x2="372" y2="98"/>`;
+  for (const t of [0, 45, 90, 135, 180]) s += `<line class="axis" x1="${X(t)}" y1="98" x2="${X(t)}" y2="102"/><text class="tick" x="${X(t)}" y="116" text-anchor="middle">${t}°</text>`;
+  let p = ''; for (let k = 0; k < g.length; k++) p += (k ? 'L' : 'M') + X(k * 0.5).toFixed(1) + ' ' + Y(g[k]).toFixed(1);
+  p += 'L' + X(180).toFixed(1) + ' ' + Y(g[0]).toFixed(1);
+  s += `<path class="cpath" d="${p}"/>`;
+  s += `<line class="ctrue" x1="${X(PHI_DEG)}" y1="98" x2="${X(PHI_DEG)}" y2="91"/><text class="ctl-t" x="${X(PHI_DEG)}" y="88" text-anchor="middle">истина</text>`;
+  s += `<circle class="cmin" cx="${X(data.best).toFixed(1)}" cy="${Y(crit(data.shops, data.best)).toFixed(1)}" r="3.5"/>`;
+  const cv = crit(data.shops, S.ang);
+  s += `<line class="cmark" x1="${X(S.ang).toFixed(1)}" y1="20" x2="${X(S.ang).toFixed(1)}" y2="98"/><circle class="cdot" cx="${X(S.ang).toFixed(1)}" cy="${Y(cv).toFixed(1)}" r="5"/>`;
+  s += `<text class="tick" x="34" y="${Y(mx) + 4}" text-anchor="end">макс</text><text class="tick" x="34" y="${Y(mn) + 4}" text-anchor="end">мин</text>`;
+  return s;
+}
+const LEG = {
+  1: '<span><i class="sw ramp"></i>выручка: ниже ↔ выше обычной</span>',
+  2: '<span><i class="sw"></i>стрелка магазина <i class="m">b̂<sub>i</sub></i></span>',
+  3: '<span><i class="sw true"></i>истина: <i class="m">ℓ<sub>i</sub>β</i> и прямая</span><span><i class="sw" style="opacity:.5"></i>оценки с шага 2</span>',
+  4: '<span><i class="sw true"></i>истинная прямая, <i class="m">β</i></span><span><i class="sw est"></i>оценка по всем</span><span><i class="sw"></i>магазины</span>',
+  5: '<span><i class="sw cur"></i>пробная прямая</span><span><i class="sw ell"></i>неопределённость стрелки</span><span><i class="sw true" style="opacity:.5"></i>истина</span>',
+};
+function renderRight() {
+  $('#rightTitle').textContent = S.step === 1 ? `Магазин ${S.sel + 1} крупно` : 'Плоскость наклонов';
+  $('#legend').innerHTML = LEG[S.step];
+  $('#plane').innerHTML = S.step === 1 ? zoom() : plane();
+  const c = $('#crit'); c.hidden = S.step !== 5; if (S.step === 5) c.innerHTML = critChart();
+}
+
+/* ---------- текст, управление, сводка ---------- */
+function renderNav() {
+  $('#steps').innerHTML = STEPS.map((x, i) => `<button type="button" data-step="${i + 1}" ${S.step === i + 1 ? 'aria-current="step"' : ''}><span class="n">${i + 1}</span>${x.nav}</button>`).join('');
+  $('#pos').textContent = `${S.step} / 5`;
+  $('#prev').disabled = S.step === 1; $('#next').disabled = S.step === 5;
+}
+function renderText() {
+  const x = STEPS[S.step - 1];
+  $('#text').innerHTML = `<h2>${x.title()}</h2><div class="formula">${x.formula()}</div>${x.html()}`;
+}
+function renderControls() {
+  $('#g-replay').hidden = S.step !== 3;
+  $('#g-scale').hidden = S.step !== 4;
+  $('#g-noise').hidden = S.step < 4;
+  $('#g-angle').hidden = S.step !== 5;
+  $('#aa-o').textContent = fmt(S.a, 1); $('#sig-o').textContent = fmt(S.sigma, 1);
+  $('#tt-o').textContent = S.T; $('#ang-o').textContent = S.ang.toFixed(1) + '°';
+}
+function renderReadout() {
+  const rows = []; const sh = data.shops;
+  if (S.step === 1) rows.push(['Магазинов', '8'], ['Недель на магазин', S.T], ['Наблюдений всего', 8 * S.T]);
+  if (S.step === 2) rows.push(['Точек на одну регрессию', S.T], ['Неизвестных в ней', '3'], ['', '<span style="font:13px var(--f-body);color:var(--muted)">уровень и два наклона</span>']);
+  if (S.step === 3) rows.push(['Направление β', `${PHI_DEG}°`], ['Нагрузки ℓ<sub>i</sub>', ''], ['', L0.map(v => fmt(v, 2)).join(' · ')]);
+  if (S.step === 4) {
+    let dmax = 0;
+    sh.forEach((d, i) => { for (let t = 0; t < S.T; t++) { const idx = d.X1[t] * BS[0] + d.X2[t] * BS[1]; dmax = Math.max(dmax, Math.abs((L0[i] / S.a) * (S.a * idx) - L0[i] * idx)); } });
+    rows.push(['Ошибка одного магазина, в среднем', `${data.errOne.toFixed(1)}°`],
+      ['Ошибка оценки по всем восьми', `<span class="good">${data.errAll.toFixed(1)}°</span>`],
+      ['Длина ‖β‖', fmt(Math.abs(S.a), 1)],
+      ['Изменение прогнозов', dmax < 1e-9 ? '0' : dmax.toExponential(1)]);
+  }
+  if (S.step === 5) rows.push(['Угол прямой', `${S.ang.toFixed(1)}°`],
+    ['Сумма отклонений', crit(sh, S.ang).toFixed(1)],
+    ['Лучший угол', `<span class="good">${data.best.toFixed(1)}°</span>`],
+    ['Истинный угол', `${PHI_DEG}°`]);
+  $('#readout').innerHTML = rows.map(([a, b]) => a === '' ? `<dd class="full">${b}</dd>` : `<dt>${a}</dt><dd>${b}</dd>`).join('');
+}
+function applyHL() {
+  for (const box of [$('#shops'), $('#plane')]) {
+    box.classList.toggle('has-hl', S.hl !== null);
+    box.querySelectorAll('[data-i]').forEach(e => e.classList.toggle('hl', +e.dataset.i === S.hl));
+  }
+}
+function renderFrame() { renderLeft(); renderRight(); applyHL(); }
+function render() { renderNav(); renderText(); renderControls(); renderFrame(); renderReadout(); }
+
+function play(dur, delay = 0) {
+  cancelAnimationFrame(anim.raf);
+  if (reduce) { anim.k = 1; renderFrame(); return; }
+  const t0 = performance.now(); anim.k = 0; renderFrame();
+  const tick = now => {
+    const p = clamp((now - t0 - delay) / dur, 0, 1); anim.k = ease(p); renderFrame();
+    if (p < 1) anim.raf = requestAnimationFrame(tick);
+  };
+  anim.raf = requestAnimationFrame(tick);
+}
+function goStep(n) {
+  n = clamp(n, 1, 5); if (n === S.step) return;
+  cancelAnimationFrame(anim.raf); S.step = n; S.hl = null; anim.k = 1; render();
+  if (n === 2) play(1100);
+  if (n === 3) play(1300, 600);
+}
+function update() { data = compute(); renderControls(); renderFrame(); renderReadout(); }
+
+/* ---------- события ---------- */
+$('#steps').addEventListener('click', e => { const b = e.target.closest('[data-step]'); if (b) goStep(+b.dataset.step); });
+$('#prev').addEventListener('click', () => goStep(S.step - 1));
+$('#next').addEventListener('click', () => goStep(S.step + 1));
+$('#replay').addEventListener('click', () => play(1300, 500));
+$('#shops').addEventListener('click', e => {
+  const b = e.target.closest('.shop'); if (!b || S.step !== 1) return;
+  S.sel = +b.dataset.i; renderFrame();
+});
+for (const box of ['#shops', '#plane']) {
+  $(box).addEventListener('pointerover', e => { const t = e.target.closest('[data-i]'); const v = t ? +t.dataset.i : null; if (v !== S.hl && S.step > 1) { S.hl = v; applyHL(); } });
+  $(box).addEventListener('pointerleave', () => { if (S.hl !== null) { S.hl = null; applyHL(); } });
+}
+let pending = 0;
+const sched = () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(update); };
+$('#sig').addEventListener('input', e => { S.sigma = +e.target.value; sched(); });
+$('#tt').addEventListener('input', e => { S.T = TLIST[+e.target.value]; sched(); });
+$('#aa').addEventListener('input', e => {
+  let a = +e.target.value; if (Math.abs(a) < 0.2) a = a < 0 ? -0.2 : 0.2;
+  S.a = a; renderControls(); renderFrame(); renderReadout();
+});
+$('#ang').addEventListener('input', e => { S.ang = +e.target.value; renderControls(); renderRight(); applyHL(); renderReadout(); });
+$('#reseed').addEventListener('click', () => { S.seed += 1; raw = genRaw(S.seed); update(); });
+$('#best').addEventListener('click', () => {
+  const from = S.ang; let to = data.best; if (to - from > 90) to -= 180; if (from - to > 90) to += 180;
+  const fin = () => { S.ang = Math.round(((data.best % 180) + 180) % 180 * 2) / 2; $('#ang').value = S.ang; renderControls(); renderRight(); renderReadout(); };
+  if (reduce) { fin(); return; }
+  const t0 = performance.now();
+  const tick = now => {
+    const p = clamp((now - t0) / 800, 0, 1);
+    S.ang = ((lerp(from, to, ease(p)) % 180) + 180) % 180; $('#ang').value = S.ang;
+    renderControls(); renderRight(); renderReadout();
+    if (p < 1) requestAnimationFrame(tick); else fin();
+  };
+  requestAnimationFrame(tick);
+});
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea')) return;
+  if (e.key === 'ArrowRight') goStep(S.step + 1);
+  if (e.key === 'ArrowLeft') goStep(S.step - 1);
+});
+
+data = compute(); render();
+})();
+</script>
+</body>
+</html>
