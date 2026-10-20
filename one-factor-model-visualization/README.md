@@ -16,5 +16,5 @@ $$Y_{it} = c_i + \ell_i\, X_{it}^\top \beta + u_{it},\qquad i = 1,\dots,n,\quad 
 
 ## Как открыть
 
-- Онлайн: https://mark37mur-ops.github.io/diplom/visualization/
+- Онлайн: https://mark37mur-ops.github.io/diplom/one-factor-model-visualization/
 - Локально: скачать `index.html` и открыть в браузере.
