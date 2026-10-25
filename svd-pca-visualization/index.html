@@ -1,0 +1,1153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Интерактивная визуализация сингулярного разложения (SVD) и метода главных компонент (PCA)">
+<title>SVD и PCA: визуализация</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=STIX+Two+Text:ital,wght@0,500;0,600;1,400;1,600&display=swap">
+<style>
+/* Layout: заголовок → шаги → сцена (вход / сингулярные числа / облако | образ / матрица / кривые / 3D) → текст + управление → листалка */
+:root{
+  --paper:#eef2f4; --panel:#fafbfc; --plot:#f6f8f9; --ink:#14202b; --muted:#566573;
+  --rule:#d2dbe2; --grid:#e1e8ed; --axis:#a3b1bc;
+  --accent:#bf3a20; --accent2:#7b3fa0; --est:#1d5fbf;
+  --hpos:#1d5fbf; --hneg:#c8500a; --img0:#0d0d0d; --img1:#f5f5f5;
+  --f-head:"STIX Two Text","Cambria",Georgia,serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-math:"STIX Two Text","Cambria Math","Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0e1317; --panel:#141b21; --plot:#11181d; --ink:#e3eaef; --muted:#8e9eab;
+  --rule:#26313a; --grid:#1d2830; --axis:#465661;
+  --accent:#ff7a5a; --accent2:#c79bff; --est:#6aa8ff; --hpos:#6aa8ff; --hneg:#ff9b6a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0e1317; --panel:#141b21; --plot:#11181d; --ink:#e3eaef; --muted:#8e9eab;
+  --rule:#26313a; --grid:#1d2830; --axis:#465661;
+  --accent:#ff7a5a; --accent2:#c79bff; --est:#6aa8ff; --hpos:#6aa8ff; --hneg:#ff9b6a; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:16px/1.55 var(--f-body)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));padding-block:28px 40px}
+.eyebrow{font:500 12px/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+h1{font:600 clamp(30px,4.4vw,46px)/1.08 var(--f-head);margin:0 0 10px;letter-spacing:-.01em;text-wrap:balance}
+.lead{max-width:68ch;color:var(--muted);margin:0}
+
+.steps{display:flex;gap:6px;margin:24px 0 16px;overflow-x:auto;padding-bottom:4px}
+.steps button{flex:0 0 auto;display:flex;align-items:baseline;gap:8px;border:1px solid var(--rule);background:transparent;color:var(--muted);padding:8px 12px;border-radius:6px;font:500 14px/1.2 var(--f-body);cursor:pointer}
+.steps button .n{font:500 12px var(--f-mono)}
+.steps button:hover{color:var(--ink);border-color:var(--axis)}
+.steps button[aria-current="step"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);gap:16px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:14px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.ph{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px}
+.ph h3{margin:0;font:600 14px/1.3 var(--f-body)}
+.hint{font-size:13px;color:var(--muted)}
+
+#left,#right{width:100%;height:auto;display:block}
+#left.drag{touch-action:none;cursor:crosshair}
+#right.rot{touch-action:none;cursor:grab}
+#right.dragging{cursor:grabbing}
+.has-hl [data-i]:not(.hl){opacity:.2}
+
+.mats{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:center;gap:8px 10px;padding:2px 0}
+.mgrp{display:flex;align-items:flex-start;gap:8px 10px}
+.mcol{display:flex;flex-direction:column;align-items:center;gap:3px}
+.mx{display:inline-grid;grid-template-columns:repeat(2,auto);gap:2px 10px;padding:4px 9px;border-left:1.5px solid var(--ink);border-right:1.5px solid var(--ink);border-radius:7px;font:500 13px/1.35 var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.mx .z{color:var(--muted)}
+.mlab{font:italic 15px var(--f-math)}
+.eq{font:17px/2.2 var(--f-math);color:var(--muted)}
+
+.lg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--muted)}
+.lg span{display:inline-flex;align-items:center;gap:5px}
+.sw{display:inline-block;width:18px;height:0;border-top:2.5px solid var(--ink)}
+.sw.thin{border-top-width:1.4px}
+.sw.a1{border-color:var(--accent);border-top-width:3px}
+.sw.a2{border-color:var(--accent2);border-top-width:3px}
+.sw.es{border-color:var(--est);border-top-width:3px}
+.sw.dash{border-top-style:dashed;border-top-width:2px}
+.sw.ghost{border-color:var(--muted);border-top-style:dashed;border-top-width:1.5px}
+.sw.heat{height:10px;border:0;background:linear-gradient(90deg,var(--hneg),var(--plot),var(--hpos));border-radius:2px;width:44px}
+.sw.gray{height:10px;border:0;background:linear-gradient(90deg,var(--img0),var(--img1));border-radius:2px;width:44px}
+.sw.seq{height:10px;border:0;background:linear-gradient(90deg,var(--plot),color-mix(in oklab,var(--est) 50%,var(--plot)));border-radius:2px;width:44px;outline:1px solid var(--rule)}
+.sw.pl{height:10px;border:1px solid color-mix(in oklab,var(--est) 50%,transparent);background:color-mix(in oklab,var(--est) 14%,transparent);border-radius:2px}
+.dsw{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ink)}
+.dsw.acc{background:var(--accent)}
+
+/* svg */
+.plotbg{fill:var(--plot)}
+.grid{stroke:var(--grid);stroke-width:1}
+.axis{stroke:var(--axis);stroke-width:1.2}
+.axis.neg{stroke-dasharray:3 4;opacity:.7}
+.tick{fill:var(--muted);font:11px var(--f-mono)}
+.axl{fill:var(--muted);font:12.5px var(--f-body)}
+.axl3{fill:var(--muted);font:500 12.5px var(--f-body)}
+.cap{fill:var(--ink);font:500 12.5px var(--f-body)}
+.frame{fill:none;stroke:var(--rule);stroke-width:1}
+.ugrid{stroke:var(--muted);stroke-width:.8;opacity:.42}
+.circ{fill:none;stroke:var(--ink);stroke-width:2.2}
+.ghost{fill:none;stroke:var(--muted);stroke-width:1.2;stroke-dasharray:4 4;opacity:.75}
+.a-v1 line{stroke:var(--accent);stroke-width:2.4}.a-v1 polygon{fill:var(--accent)}
+.a-v2 line{stroke:var(--accent2);stroke-width:2.4}.a-v2 polygon{fill:var(--accent2)}
+.a-w3 line{stroke:var(--est);stroke-width:2.2}.a-w3 polygon{fill:var(--est)}
+.a-x line{stroke:var(--ink);stroke-width:1.4}.a-x polygon{fill:var(--ink)}
+.l-v1{fill:var(--accent);font:italic 600 15px var(--f-math)}
+.l-v2{fill:var(--accent2);font:italic 600 15px var(--f-math)}
+.l-w3{fill:var(--est);font:italic 600 15px var(--f-math)}
+.l-x{fill:var(--ink);font:italic 15px var(--f-math)}
+.handle{fill:var(--ink);stroke:var(--panel);stroke-width:2.5}
+.pt{fill:var(--ink)}
+.prj{fill:var(--accent)}
+.tax{stroke:var(--accent);stroke-width:2.2}
+.tax.soft{opacity:.45;stroke-width:1.6}
+.tax.gh{stroke:var(--muted);stroke-dasharray:5 5;stroke-width:1.3;opacity:.8}
+.res{stroke:var(--est);stroke-width:1.1;stroke-dasharray:3 3}
+.cur-a{fill:none;stroke:var(--accent);stroke-width:2.4}
+.cur-e{fill:none;stroke:var(--est);stroke-width:2.4;stroke-dasharray:6 4}
+.cur-t{fill:none;stroke:var(--muted);stroke-width:1.3;stroke-dasharray:3 4}
+.mark{stroke:var(--ink);stroke-width:1;opacity:.55}
+.dot-a{fill:var(--accent)}.dot-e{fill:var(--est)}
+.ell{fill:color-mix(in oklab,var(--accent) 7%,transparent);stroke:var(--accent);stroke-width:1.1;stroke-dasharray:4 4}
+.meanx{stroke:var(--ink);stroke-width:2.2}
+.outl{fill:var(--accent);stroke:var(--panel);stroke-width:2}
+.outr{fill:none;stroke:var(--accent);stroke-width:1.4}
+.plane{fill:color-mix(in oklab,var(--est) 12%,transparent);stroke:color-mix(in oklab,var(--est) 55%,transparent);stroke-width:1.1}
+.plgrid{stroke:color-mix(in oklab,var(--est) 24%,transparent);stroke-width:.8}
+.fline{stroke:var(--est);stroke-width:2.4}
+.sbar{fill:var(--est)}
+.sbar.off{fill:var(--axis)}
+.hit{fill:transparent;cursor:pointer}
+.hit:hover+.sbar,.sbar.hov{opacity:.75}
+.sval{fill:var(--ink);font:500 11px var(--f-mono)}
+.kmark{stroke:var(--ink);stroke-width:1;stroke-dasharray:3 3;opacity:.7}
+.divl{stroke:var(--rule);stroke-width:1}
+.bar-p{fill:var(--hpos)}.bar-n{fill:var(--hneg)}
+.cell-t{fill:var(--ink);font:500 16px var(--f-mono)}
+.cell-o{fill:var(--muted);font:10.5px var(--f-mono)}
+.rowl{fill:var(--ink);font:500 12px var(--f-body)}
+.ttl{fill:var(--ink);font:600 13px var(--f-body)}
+
+.explain{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
+.text{min-width:0;padding-inline:4px}
+.text h2{font:600 clamp(23px,2.6vw,28px)/1.2 var(--f-head);margin:0 0 12px;text-wrap:balance}
+.text p{margin:0 0 12px;max-width:66ch}
+.text b{font-weight:600}
+.formula{font-family:var(--f-math);font-style:italic;font-size:19px;padding:12px 14px;border-left:3px solid var(--accent);background:var(--panel);margin:4px 0 16px;overflow-x:auto;white-space:nowrap;max-width:66ch}
+.m{font-family:var(--f-math);font-style:italic;font-size:1.1em;white-space:nowrap}
+.t{font-family:var(--f-body);font-style:normal;font-size:.8em}
+.c1{color:var(--accent)}.c2{color:var(--accent2)}.c3{color:var(--est)}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.grp{border:1px solid var(--rule);border-radius:8px;padding:12px 14px;background:var(--panel);display:grid;gap:12px}
+.grp h4{margin:0;font:500 11.5px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.mgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 16px}
+.ctl{display:grid;gap:4px}
+.ctl label{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.ctl output{font:500 13px var(--f-mono);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--ink);margin:2px 0}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:500 14px var(--f-body);padding:8px 12px;border-radius:6px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+.btn:hover{background:color-mix(in oklab,var(--ink) 8%,transparent)}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.btn.sm{padding:6px 10px;font-size:13.5px}
+.btn:disabled{opacity:.35;cursor:default}
+.seg{display:inline-flex;border:1px solid var(--ink);border-radius:6px;overflow:hidden;width:max-content;max-width:100%}
+.seg button{font:500 14px var(--f-mono);padding:7px 13px;border:0;background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap}
+.seg.txt button{font:500 13px var(--f-body);padding:7px 10px}
+.seg button+button{border-left:1px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.chk{display:flex;align-items:center;gap:9px;font-size:14px;cursor:pointer}
+.chk input{accent-color:var(--ink);width:16px;height:16px;margin:0;flex:0 0 auto}
+dl.ro{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;margin:0;font-size:14px}
+dl.ro dt{color:var(--muted)}
+dl.ro dd{margin:0;font:500 14px var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+.good{color:var(--est)}
+
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--rule)}
+.pager .pos{font:500 13px var(--f-mono);color:var(--muted)}
+.foot{margin-top:22px;font-size:13px;color:var(--muted);max-width:80ch}
+:focus-visible{outline:2px solid var(--est);outline-offset:2px}
+
+@media (max-width:860px){.stage,.explain{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:560px){
+  .wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 32px}
+  .formula{font-size:17px}
+  .mx{font-size:12px;gap:2px 7px;padding:3px 7px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Линейная алгебра · разложения матриц · к диплому</p>
+    <h1>SVD и PCA: визуализация</h1>
+    <p class="lead">Сингулярное разложение и метод главных компонент по шагам, как в конспекте. Первые два шага про SVD: что матрица делает с плоскостью и как сжать матрицу до нескольких слоёв. Следующие три про PCA: как найти главные оси облака точек, зачем вычитать среднее и сколько осей оставить.</p>
+  </header>
+
+  <nav class="steps" id="steps" aria-label="Шаги"></nav>
+
+  <section class="stage">
+    <div class="panel">
+      <div class="ph"><h3 id="leftTitle"></h3><span class="hint" id="leftHint"></span></div>
+      <svg id="left" viewBox="0 0 400 400" role="img" aria-label="Левая панель"></svg>
+      <div class="mats" id="mats" hidden></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3 id="rightTitle"></h3><span class="hint" id="rightHint"></span></div>
+      <div class="lg" id="legend"></div>
+      <svg id="right" viewBox="0 0 400 400" role="img" aria-label="Правая панель"></svg>
+    </div>
+  </section>
+
+  <section class="explain">
+    <article class="text" id="text" aria-live="polite"></article>
+    <aside class="side">
+      <div class="grp" id="g-mat" hidden>
+        <h4>Матрица A</h4>
+        <div class="mgrid">
+          <div class="ctl"><label for="a11"><span>a<sub>11</sub></span><output id="a11-o"></output></label><input type="range" id="a11" min="-2.5" max="2.5" step="0.05"></div>
+          <div class="ctl"><label for="a12"><span>a<sub>12</sub></span><output id="a12-o"></output></label><input type="range" id="a12" min="-2.5" max="2.5" step="0.05"></div>
+          <div class="ctl"><label for="a21"><span>a<sub>21</sub></span><output id="a21-o"></output></label><input type="range" id="a21" min="-2.5" max="2.5" step="0.05"></div>
+          <div class="ctl"><label for="a22"><span>a<sub>22</sub></span><output id="a22-o"></output></label><input type="range" id="a22" min="-2.5" max="2.5" step="0.05"></div>
+        </div>
+        <div class="row" id="presets">
+          <button class="btn sm" type="button" data-p="0">Пример</button>
+          <button class="btn sm" type="button" data-p="1">Симметричная</button>
+          <button class="btn sm" type="button" data-p="2">Сдвиг</button>
+          <button class="btn sm" type="button" data-p="3">Ранг 1</button>
+          <button class="btn sm" type="button" data-p="4">Поворот</button>
+        </div>
+      </div>
+      <div class="grp" id="g-stage" hidden>
+        <h4>Этапы</h4>
+        <div class="seg" id="stseg" role="group" aria-label="Этап">
+          <button type="button" data-t="0" aria-pressed="false">x</button>
+          <button type="button" data-t="1" aria-pressed="false">Vᵀx</button>
+          <button type="button" data-t="2" aria-pressed="false">ΣVᵀx</button>
+          <button type="button" data-t="3" aria-pressed="true">UΣVᵀx</button>
+        </div>
+        <div class="row"><button class="btn primary" id="playst" type="button">Проиграть по шагам</button></div>
+      </div>
+      <div class="grp" id="g-ds" hidden>
+        <h4>Матрица</h4>
+        <div class="seg txt" id="dsseg" role="group" aria-label="Матрица">
+          <button type="button" data-ds="img" aria-pressed="true">Картинка</button>
+          <button type="button" data-ds="rat" aria-pressed="false">Оценки фильмов</button>
+          <button type="button" data-ds="noise" aria-pressed="false">Сигнал + шум</button>
+        </div>
+        <div class="ctl"><label for="k2"><span>Число слоёв <span class="m">k</span></span><output id="k2-o"></output></label><input type="range" id="k2" min="1" max="64" step="1" value="8"></div>
+        <div class="ctl">
+          <label><span>Показать</span></label>
+          <div class="seg txt" id="vseg" role="group" aria-label="Что показать">
+            <button type="button" data-v="approx" aria-pressed="true">A<sub>k</sub></button>
+            <button type="button" data-v="layer" aria-pressed="false">Слой k</button>
+            <button type="button" data-v="orig" aria-pressed="false">Исходная</button>
+            <button type="button" data-v="sig" aria-pressed="false">Сигнал</button>
+          </div>
+        </div>
+        <div class="ctl" id="nz-c"><label for="nz"><span>Шум</span><output id="nz-o"></output></label><input type="range" id="nz" min="0" max="1.5" step="0.05" value="0.6"></div>
+      </div>
+      <div class="grp" id="g-axis" hidden>
+        <h4>Пробная ось</h4>
+        <div class="ctl"><label for="th"><span>Угол оси <span class="m">θ</span></span><output id="th-o"></output></label><input type="range" id="th" min="0" max="179" step="1" value="12"></div>
+        <div class="row"><button class="btn primary" id="find" type="button">Найти главную ось</button><button class="btn" id="reseed3" type="button">Новые данные</button></div>
+        <label class="chk"><input type="checkbox" id="showax"> Показать главные оси w<sub>1</sub>, w<sub>2</sub></label>
+      </div>
+      <div class="grp" id="g-c4" hidden>
+        <h4>Данные</h4>
+        <label class="chk"><input type="checkbox" id="center" checked> Вычитать среднее (центрирование)</label>
+        <label class="chk"><input type="checkbox" id="outl"> Добавить выброс</label>
+        <div class="row"><button class="btn" id="reseed4" type="button">Новые данные</button></div>
+      </div>
+      <div class="grp" id="g-cam" hidden>
+        <h4>Вид</h4>
+        <div class="row">
+          <button class="btn" id="v-edge" type="button">Сбоку на плоскость</button>
+          <button class="btn" id="v-face" type="button">Сверху</button>
+          <button class="btn" id="v-reset" type="button">Исходный вид</button>
+        </div>
+      </div>
+      <div class="grp" id="g-k3" hidden>
+        <h4>Сколько осей оставить</h4>
+        <div class="seg" id="k3seg" role="group" aria-label="Число осей">
+          <button type="button" data-k="1" aria-pressed="false">k = 1</button>
+          <button type="button" data-k="2" aria-pressed="true">k = 2</button>
+          <button type="button" data-k="3" aria-pressed="false">k = 3</button>
+        </div>
+        <div class="ctl"><label for="thick"><span>Толщина облака</span><output id="thick-o"></output></label><input type="range" id="thick" min="0" max="1.2" step="0.05" value="0.3"></div>
+        <div class="row"><button class="btn" id="reseed5" type="button">Новые данные</button></div>
+      </div>
+      <div class="grp"><dl class="ro" id="readout"></dl></div>
+    </aside>
+  </section>
+
+  <div class="pager">
+    <button class="btn" id="prev" type="button">← Назад</button>
+    <span class="pos" id="pos">1 / 5</span>
+    <button class="btn primary" id="next" type="button">Дальше →</button>
+  </div>
+
+  <p class="foot">Данные синтетические. Картинка 64 × 64 нарисована программой, оценки 40 школьников и облако из 70 точек сгенерированы случайно, таблица оценок фильмов взята из конспекта. Матрица наклонов на шаге 5 устроена как в многофакторной визуализации: 12 магазинов, 100 признаков, два индекса. Все разложения считаются прямо на странице методом Якоби.</p>
+</div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const wrap180 = a => ((a + 180) % 360 + 360) % 360 - 180;
+const fmt = (v, d = 1) => (v < 0 && Math.abs(v) >= 0.5 * Math.pow(10, -d) ? '−' : '') + Math.abs(v).toFixed(d);
+const pct = (v, d = 0) => (v * 100).toFixed(d) + '%';
+const int = v => Math.round(v).toLocaleString('ru-RU');
+const sub = n => String(n).replace(/\d/g, c => '₀₁₂₃₄₅₆₇₈₉'[c]);
+const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+const maxAbs = a => { let m = 0; for (const r of a) { if (typeof r === 'number') m = Math.max(m, Math.abs(r)); else for (const v of r) m = Math.max(m, Math.abs(v)); } return m; };
+const f1 = v => v.toFixed(1);
+
+function arrow(x0, y0, x1, y1, cls, hw, extra = '') {
+  const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
+  if (L < 0.5) return '';
+  const ux = dx / L, uy = dy / L, h = Math.min(hw * 2.6, L * 0.55);
+  const bx = x1 - ux * h, by = y1 - uy * h, px = -uy * hw, py = ux * hw;
+  return `<g class="${cls}" ${extra}><line x1="${f1(x0)}" y1="${f1(y0)}" x2="${f1(bx)}" y2="${f1(by)}"/>` +
+    `<polygon points="${f1(x1)},${f1(y1)} ${f1(bx + px)},${f1(by + py)} ${f1(bx - px)},${f1(by - py)}"/></g>`;
+}
+function label(x0, y0, x1, y1, txt, cls, off = 13) {
+  const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
+  if (L < 9) return '';
+  return `<text class="${cls}" x="${f1(x1 + dx / L * off)}" y="${f1(y1 + dy / L * off + 5)}" text-anchor="middle">${txt}</text>`;
+}
+function rng(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function normals(seed, count) {
+  const r = rng(seed), out = new Float64Array(count);
+  for (let i = 0; i < count; i++) { let u = 0; while (u === 0) u = r(); out[i] = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); }
+  return out;
+}
+function niceStep(range, target = 5) {
+  const raw = range / target, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+  return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p;
+}
+
+/* ---------- линейная алгебра ---------- */
+function eigSym(A) { // Якоби для небольшой симметричной матрицы
+  const n = A.length, a = A.map(r => r.slice()), V = A.map((_, i) => A.map((__, j) => +(i === j)));
+  for (let sw = 0; sw < 60; sw++) {
+    let off = 0; for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) off += a[p][q] * a[p][q];
+    if (off < 1e-26) break;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
+      if (Math.abs(a[p][q]) < 1e-300) continue;
+      const th = 0.5 * Math.atan2(2 * a[p][q], a[q][q] - a[p][p]), c = Math.cos(th), s = Math.sin(th);
+      for (let k = 0; k < n; k++) { const x = a[k][p], y = a[k][q]; a[k][p] = c * x - s * y; a[k][q] = s * x + c * y; }
+      for (let k = 0; k < n; k++) { const x = a[p][k], y = a[q][k]; a[p][k] = c * x - s * y; a[q][k] = s * x + c * y; }
+      for (let k = 0; k < n; k++) { const x = V[k][p], y = V[k][q]; V[k][p] = c * x - s * y; V[k][q] = s * x + c * y; }
+    }
+  }
+  return a.map((_, k) => ({ val: Math.max(0, a[k][k]), vec: V.map(r => r[k]) })).sort((u, v) => v.val - u.val);
+}
+// SVD односторонним методом Якоби: столбцы попарно ортогонализуются вращениями
+function svd(rows) {
+  const n = rows.length, d = rows[0].length;
+  if (n < d) {
+    const T = Array.from({ length: d }, (_, j) => { const r = new Float64Array(n); for (let i = 0; i < n; i++) r[i] = rows[i][j]; return r; });
+    const t = svd(T); return { s: t.s, U: t.V, V: t.U };
+  }
+  const C = Array.from({ length: d }, (_, j) => { const c = new Float64Array(n); for (let i = 0; i < n; i++) c[i] = rows[i][j]; return c; });
+  const W = Array.from({ length: d }, (_, j) => { const c = new Float64Array(d); c[j] = 1; return c; });
+  for (let sw = 0; sw < 50; sw++) {
+    let off = 0;
+    for (let p = 0; p < d - 1; p++) for (let q = p + 1; q < d; q++) {
+      const a = C[p], b = C[q]; let al = 0, be = 0, ga = 0;
+      for (let i = 0; i < n; i++) { al += a[i] * a[i]; be += b[i] * b[i]; ga += a[i] * b[i]; }
+      if (al < 1e-300 || be < 1e-300) continue;
+      const r = Math.abs(ga) / Math.sqrt(al * be);
+      if (r < 1e-14) continue;
+      if (r > off) off = r;
+      const ze = (be - al) / (2 * ga), t = (ze >= 0 ? 1 : -1) / (Math.abs(ze) + Math.sqrt(1 + ze * ze));
+      const c = 1 / Math.sqrt(1 + t * t), s = c * t;
+      for (let i = 0; i < n; i++) { const x = a[i], y = b[i]; a[i] = c * x - s * y; b[i] = s * x + c * y; }
+      const va = W[p], vb = W[q];
+      for (let i = 0; i < d; i++) { const x = va[i], y = vb[i]; va[i] = c * x - s * y; vb[i] = s * x + c * y; }
+    }
+    if (off < 1e-13) break;
+  }
+  const order = C.map((c, j) => ({ j, s: Math.sqrt(dot(c, c)) })).sort((x, y) => y.s - x.s);
+  const s = [], U = [], V = [];
+  for (const { j, s: sj } of order) {
+    const u = new Float64Array(n), v = Float64Array.from(W[j]);
+    if (sj > 1e-12) for (let i = 0; i < n; i++) u[i] = C[j][i] / sj;
+    let f = 0; while (f < d - 1 && Math.abs(v[f]) < 1e-9) f++;
+    if (v[f] < 0) { for (let i = 0; i < n; i++) u[i] = -u[i]; for (let i = 0; i < d; i++) v[i] = -v[i]; }
+    s.push(sj); U.push(u); V.push(v);
+  }
+  return { s, U, V };
+}
+
+/* ---------- шаг 1: матрица 2×2 ---------- */
+function svd2(m00, m01, m10, m11) { // A = R(ph)·diag(sx, sy)·R(th)
+  const E = (m00 + m11) / 2, F = (m00 - m11) / 2, G = (m10 + m01) / 2, H = (m10 - m01) / 2;
+  const Q = Math.hypot(E, H), R = Math.hypot(F, G), a1 = Math.atan2(G, F), a2 = Math.atan2(H, E);
+  return { sx: Q + R, sy: Q - R, th: (a2 - a1) / 2, ph: (a2 + a1) / 2 };
+}
+function dec() {
+  const [a, b, c, d] = S.A; let { sx, sy, th, ph } = svd2(a, b, c, d);
+  if (th > Math.PI / 2) { th -= Math.PI; ph -= Math.PI; } else if (th <= -Math.PI / 2) { th += Math.PI; ph += Math.PI; }
+  ph = Math.atan2(Math.sin(ph), Math.cos(ph));
+  const sg = sy < 0 ? -1 : 1;
+  return { sx, sy, th, ph, s1: sx, s2: Math.abs(sy), sg,
+    v1: [Math.cos(th), -Math.sin(th)], v2: [Math.sin(th), Math.cos(th)],
+    u1: [Math.cos(ph), Math.sin(ph)], u2: [-sg * Math.sin(ph), sg * Math.cos(ph)] };
+}
+const R2 = a => [Math.cos(a), -Math.sin(a), Math.sin(a), Math.cos(a)];
+const mul2 = (P, Q) => [P[0] * Q[0] + P[1] * Q[2], P[0] * Q[1] + P[1] * Q[3], P[2] * Q[0] + P[3] * Q[2], P[2] * Q[1] + P[3] * Q[3]];
+const ap2 = (M, p) => [M[0] * p[0] + M[1] * p[1], M[2] * p[0] + M[3] * p[1]];
+function stageMap(dd, t) {
+  if (t <= 1) return R2(dd.th * t);
+  const D = k => [1 + (dd.sx - 1) * k, 0, 0, 1 + (dd.sy - 1) * k];
+  if (t <= 2) return mul2(D(t - 1), R2(dd.th));
+  return mul2(R2(dd.ph * (t - 2)), mul2(D(1), R2(dd.th)));
+}
+const PRESETS = [[1.4, 0.9, -0.5, 1.1], [2, 1, 1, 2], [1, 1, 0, 1], [1, 2, 0.5, 1], [0.87, -0.5, 0.5, 0.87]];
+
+/* ---------- шаг 2: матрицы ---------- */
+function makeImage() {
+  const n = 64, rows = [];
+  for (let r = 0; r < n; r++) {
+    const row = new Float64Array(n);
+    for (let c = 0; c < n; c++) {
+      let v = 0.56 + 0.3 * r / 50;                                            // небо светлеет к горизонту
+      if ((r - 12) ** 2 + (c - 50) ** 2 <= 46) v = 1;                         // солнце
+      if (r >= 17 && r < 31 && Math.abs(c + 0.5 - 25) <= (r - 16) / 14 * 17) v = 0.2; // крыша
+      if (r >= 31 && r < 50 && c >= 12 && c < 38) v = 0.64;                  // стены
+      if (r >= 38 && r < 50 && c >= 16 && c < 22) v = 0.16;                  // дверь
+      if (r >= 35 && r < 42 && c >= 27 && c < 34) v = (r === 38 || c === 30) ? 0.3 : 0.97; // окно
+      if ((r - 33) ** 2 + (c - 51) ** 2 <= 38) v = 0.3;                       // крона
+      if (r >= 39 && r < 50 && c >= 50 && c < 53) v = 0.18;                  // ствол
+      if (r >= 50) v = 0.4 - 0.05 * ((r - 50) % 3 === 0);                     // земля
+      row[c] = v;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+const NZ = 48;
+function makeSignal() {
+  const t = i => i / (NZ - 1), nrm = a => { const s = Math.sqrt(dot(a, a)); return a.map(x => x / s); };
+  const L = [
+    [34, nrm(Float64Array.from({ length: NZ }, (_, i) => Math.sin(Math.PI * t(i)))), nrm(Float64Array.from({ length: NZ }, (_, j) => Math.sin(2 * Math.PI * t(j))))],
+    [24, nrm(Float64Array.from({ length: NZ }, (_, i) => Math.cos(2 * Math.PI * t(i)))), nrm(Float64Array.from({ length: NZ }, (_, j) => Math.exp(-(((t(j) - 0.7) / 0.13) ** 2))))],
+    [16, nrm(Float64Array.from({ length: NZ }, (_, i) => t(i) - 0.5)), nrm(Float64Array.from({ length: NZ }, (_, j) => Math.cos(5 * Math.PI * t(j))))],
+  ];
+  return Array.from({ length: NZ }, (_, i) => { const r = new Float64Array(NZ); for (const [s, a, b] of L) for (let j = 0; j < NZ; j++) r[j] += s * a[i] * b[j]; return r; });
+}
+const RAT = [[4, 4, 0, 2], [0, 2, 4, 4], [2, 3, 2, 3], [4, 5, 2, 4]].map(r => Float64Array.from(r));
+const IMG = makeImage(), SIG = makeSignal(), NZN = normals(4242, NZ * NZ);
+const D2 = { img: { A: IMG, sv: svd(IMG) }, rat: { A: RAT, sv: svd(RAT) }, noise: null };
+function buildNoise() { const A = SIG.map((r, i) => r.map((v, j) => v + S.nz * NZN[i * NZ + j])); D2.noise = { A, sv: svd(A) }; }
+function approx(D, k, from = 0) {
+  const { U, V, s } = D.sv, n = D.A.length, d = D.A[0].length, M = Array.from({ length: n }, () => new Float64Array(d));
+  for (let j = from; j < k; j++) { const u = U[j], v = V[j]; for (let i = 0; i < n; i++) { const a = s[j] * u[i]; if (a === 0) continue; const row = M[i]; for (let c = 0; c < d; c++) row[c] += a * v[c]; } }
+  return M;
+}
+const diffF = (A, B) => { let s = 0; for (let i = 0; i < A.length; i++) for (let j = 0; j < A[i].length; j++) s += (A[i][j] - B[i][j]) ** 2; return Math.sqrt(s); };
+const frob = A => { let s = 0; for (const r of A) for (const v of r) s += v * v; return Math.sqrt(s); };
+const energy = (sv, k) => { let a = 0, b = 0; sv.forEach((v, j) => { b += v * v; if (j < k) a += v * v; }); return b ? a / b : 1; };
+
+// цвета токенов для canvas
+const probe = document.createElement('span'); probe.style.display = 'none'; document.body.appendChild(probe);
+function tokRGB(name) { probe.style.color = `var(${name})`; const m = getComputedStyle(probe).color.match(/[\d.]+/g); return m ? m.slice(0, 3).map(Number) : [128, 128, 128]; }
+const cv = document.createElement('canvas'), big = document.createElement('canvas');
+function matURL(M, kind, vmax = 1) {
+  const n = M.length, d = M[0].length; cv.width = d; cv.height = n;
+  const ctx = cv.getContext('2d'), im = ctx.createImageData(d, n);
+  const c0 = tokRGB(kind === 'gray' ? '--img0' : '--plot'), cp = tokRGB(kind === 'gray' ? '--img1' : '--hpos'), cn = tokRGB('--hneg');
+  for (let i = 0; i < n; i++) for (let j = 0; j < d; j++) {
+    let col, a;
+    if (kind === 'gray') { a = clamp(M[i][j], 0, 1); col = cp; } else { const t = clamp(M[i][j] / vmax, -1, 1); a = Math.abs(t); col = t >= 0 ? cp : cn; }
+    const o = (i * d + j) * 4;
+    for (let q = 0; q < 3; q++) im.data[o + q] = Math.round(c0[q] + (col[q] - c0[q]) * a);
+    im.data[o + 3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+  const f = Math.max(1, Math.ceil(640 / Math.max(n, d))); big.width = d * f; big.height = n * f;
+  const bx = big.getContext('2d'); bx.imageSmoothingEnabled = false; bx.drawImage(cv, 0, 0, d * f, n * f);
+  return big.toDataURL('image/png');
+}
+
+/* ---------- шаги 3–4: школьники ---------- */
+const NS = 40;
+function genStudents(seed) {
+  const z = normals(seed * 31 + 7, 3 * NS), raw = [];
+  for (let i = 0; i < NS; i++) { const g = z[3 * i], e1 = z[3 * i + 1], e2 = z[3 * i + 2]; raw.push([clamp(75 + 8 * g + 5.5 * e1, 2, 99), clamp(38 + 10 * g + 6.5 * e2, 2, 99)]); }
+  return raw;
+}
+function moments(P, center) {
+  const n = P.length; let m = [0, 0];
+  if (center) { for (const p of P) { m[0] += p[0]; m[1] += p[1]; } m = [m[0] / n, m[1] / n]; }
+  let xx = 0, xy = 0, yy = 0;
+  for (const p of P) { const a = p[0] - m[0], b = p[1] - m[1]; xx += a * a; xy += a * b; yy += b * b; }
+  const th = 0.5 * Math.atan2(2 * xy, xx - yy), c = Math.cos(th), s = Math.sin(th);
+  const l1 = xx * c * c + 2 * xy * c * s + yy * s * s, l2 = xx + yy - l1;
+  let w1 = [c, s]; if (w1[0] < 0) w1 = [-c, -s];
+  return { m, xx, xy, yy, l1, l2, w1, w2: [-w1[1], w1[0]], n };
+}
+const corr = (P, i = 0, j = 1) => { const n = P.length; let a = 0, b = 0; for (const p of P) { a += p[i]; b += p[j]; } a /= n; b /= n; let xx = 0, xy = 0, yy = 0; for (const p of P) { xx += (p[i] - a) ** 2; yy += (p[j] - b) ** 2; xy += (p[i] - a) * (p[j] - b); } return xy / Math.sqrt(xx * yy || 1); };
+
+/* ---------- шаг 5: облако в ℝ³ и матрица наклонов ---------- */
+const N5 = 70;
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const nrm3 = a => { const s = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / s, a[1] / s, a[2] / s]; };
+const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sc3 = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const T1 = nrm3([1, 0.55, 0.2]);
+const T3 = (() => { const n = [-0.3, -0.25, 1], k = dot(n, T1); return nrm3([n[0] - k * T1[0], n[1] - k * T1[1], n[2] - k * T1[2]]); })();
+const T2 = cross(T3, T1);
+let z5 = null;
+function cloud5() {
+  const P = []; const m = [0, 0, 0];
+  for (let i = 0; i < N5; i++) { const p = add3(add3(sc3(T1, 1.45 * z5[3 * i]), sc3(T2, 0.8 * z5[3 * i + 1])), sc3(T3, S.thick * z5[3 * i + 2])); P.push(p); m[0] += p[0]; m[1] += p[1]; m[2] += p[2]; }
+  for (const p of P) for (let q = 0; q < 3; q++) p[q] -= m[q] / N5;
+  const C = [0, 1, 2].map(a => [0, 1, 2].map(b => P.reduce((s, p) => s + p[a] * p[b], 0) / (N5 - 1)));
+  const eg = eigSym(C), lam = eg.map(e => e.val);
+  let w = eg.map(e => e.vec);
+  w = w.map(v => { let k = 0; for (let q = 1; q < 3; q++) if (Math.abs(v[q]) > Math.abs(v[k])) k = q; return v[k] < 0 ? sc3(v, -1) : v; });
+  w[2] = cross(w[0], w[1]);
+  return { P, lam, w };
+}
+const SLOPES = (() => { // как в многофакторной визуализации: 12 магазинов × 100 признаков, ранг 2 + шум
+  const L0 = [[1.6, 0.3], [1.2, 0.9], [0.9, -0.5], [1.8, -0.2], [0.4, 1.3], [1.1, 0.2], [-0.8, 0.5], [0.6, 1.6], [1.4, 0.7], [0.3, -1.0], [1.0, 1.1], [2.0, 0.5]];
+  const D = 100, prof = k => { const v = Float64Array.from({ length: D }, (_, j) => Math.sin(Math.PI * k * (j + 1) / (D + 1))); const s = Math.sqrt(dot(v, v)); return v.map(x => x / s); };
+  const B1 = prof(1), B2 = prof(2), z = normals(777, 12 * D);
+  const B = L0.map((l, i) => Float64Array.from({ length: D }, (_, j) => l[0] * B1[j] + l[1] * B2[j] + 0.06 * z[i * D + j]));
+  return svd(B).s;
+})();
+
+/* ---------- состояние ---------- */
+const S = { step: 1, hl: null,
+  A: PRESETS[0].slice(), stage: 3, xa: 0.55,
+  ds: 'img', kds: { img: 8, rat: 1, noise: 3 }, view: 'approx', nz: 0.6,
+  th: 12, showAx: false, seed: 1, center: true, outlier: false, out: [38, 92],
+  k3: 2, thick: 0.3, seed5: 1, yaw: 35, pitch: 22 };
+let RAW = genStudents(S.seed);
+z5 = normals(5005, 3 * N5);
+buildNoise();
+const P3 = () => { const m = moments(RAW, true).m; return RAW.map(p => [p[0] - m[0], p[1] - m[1]]); };
+
+/* ---------- 3D ---------- */
+const PS = 60, CX = 200, CY = 205;
+function proj(p) {
+  const th = S.yaw * Math.PI / 180, ph = S.pitch * Math.PI / 180;
+  const x1 = p[0] * Math.cos(th) - p[1] * Math.sin(th);
+  const y1 = p[0] * Math.sin(th) + p[1] * Math.cos(th);
+  const y2 = y1 * Math.cos(ph) - p[2] * Math.sin(ph);
+  const z2 = y1 * Math.sin(ph) + p[2] * Math.cos(ph);
+  return [CX + PS * x1, CY - PS * z2, y2];
+}
+const seg3 = (a, b, cls, extra = '') => { const p = proj(a), q = proj(b); return `<line class="${cls}" x1="${f1(p[0])}" y1="${f1(p[1])}" x2="${f1(q[0])}" y2="${f1(q[1])}" ${extra}/>`; };
+const poly3 = (pts, cls) => `<polygon class="${cls}" points="${pts.map(p => { const q = proj(p); return f1(q[0]) + ',' + f1(q[1]); }).join(' ')}"/>`;
+let camRaf = 0;
+function animCam(to) {
+  cancelAnimationFrame(camRaf);
+  const fy = S.yaw, fp = S.pitch, dy = wrap180(to.yaw - fy), dp = to.pitch - fp;
+  if (reduce) { S.yaw = fy + dy; S.pitch = to.pitch; renderRight(); return; }
+  const t0 = performance.now();
+  const tick = now => { const p = Math.min(1, (now - t0) / 900), k = ease(p); S.yaw = fy + dy * k; S.pitch = fp + dp * k; renderRight(); if (p < 1) camRaf = requestAnimationFrame(tick); };
+  camRaf = requestAnimationFrame(tick);
+}
+function camAlong(d) { // смотреть вдоль вектора d
+  if (d[2] > 0) d = sc3(d, -1);
+  return { yaw: Math.atan2(d[0], d[1]) * 180 / Math.PI, pitch: clamp(Math.asin(clamp(-d[2], -1, 1)) * 180 / Math.PI, -85, 85) };
+}
+
+/* ---------- рисование: шаг 1 ---------- */
+const BG = `<rect class="plotbg" x="0" y="0" width="400" height="400"/>`;
+function left1() {
+  const dd = dec(), sc = 130, P = p => [200 + sc * p[0], 200 - sc * p[1]];
+  let s = BG + `<line class="axis" x1="8" y1="200" x2="392" y2="200"/><line class="axis" x1="200" y1="8" x2="200" y2="392"/>`;
+  for (const v of [-1, 1]) s += `<text class="tick" x="${200 + v * (sc + 12)}" y="215" text-anchor="middle">${fmt(v, 0)}</text><text class="tick" x="206" y="${200 - v * (sc + 10) + 4}">${fmt(v, 0)}</text>`;
+  for (let g = -1; g <= 1.001; g += 0.5) { const a = P([g, -1]), b = P([g, 1]), c = P([-1, g]), d = P([1, g]); s += `<line class="ugrid" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/><line class="ugrid" x1="${c[0]}" y1="${c[1]}" x2="${d[0]}" y2="${d[1]}"/>`; }
+  s += `<circle class="circ" cx="200" cy="200" r="${sc}"/>`;
+  const p1 = P(dd.v1), p2 = P(dd.v2), x = [Math.cos(S.xa), Math.sin(S.xa)], px = P(x);
+  s += arrow(200, 200, p1[0], p1[1], 'a-v1', 5) + label(200, 200, p1[0], p1[1], 'v₁', 'l-v1');
+  s += arrow(200, 200, p2[0], p2[1], 'a-v2', 5) + label(200, 200, p2[0], p2[1], 'v₂', 'l-v2');
+  s += arrow(200, 200, px[0], px[1], 'a-x', 3.4) + `<circle class="handle" cx="${f1(px[0])}" cy="${f1(px[1])}" r="7"/>` + label(200, 200, px[0], px[1], 'x', 'l-x', 15);
+  s += `<text class="axl" x="10" y="388">единичная окружность: все x длины 1</text>`;
+  return s;
+}
+function right1() {
+  const dd = dec(), t = S.stage, sc = 168 / Math.max(1.25, dd.s1 * 1.1), M = stageMap(dd, t);
+  const P = p => { const q = ap2(M, p); return [200 + sc * q[0], 200 - sc * q[1]]; };
+  let s = BG + `<line class="axis" x1="8" y1="200" x2="392" y2="200"/><line class="axis" x1="200" y1="8" x2="200" y2="392"/>`;
+  const range = 200 / sc, stp = range <= 2.2 ? 0.5 : range <= 5 ? 1 : 2;
+  for (let v = stp; v < range - 0.08; v += stp) for (const sg of [-1, 1]) {
+    const lab = Number.isInteger(v) ? fmt(sg * v, 0) : fmt(sg * v, 1);
+    s += `<line class="axis" x1="${f1(200 + sg * v * sc)}" y1="196" x2="${f1(200 + sg * v * sc)}" y2="204"/><line class="axis" x1="196" y1="${f1(200 - sg * v * sc)}" x2="204" y2="${f1(200 - sg * v * sc)}"/>`;
+    if (Math.abs(v - Math.round(v)) < 1e-9 || stp < 1) s += `<text class="tick" x="${f1(200 + sg * v * sc)}" y="218" text-anchor="middle">${lab}</text><text class="tick" x="192" y="${f1(200 - sg * v * sc + 4)}" text-anchor="end">${lab}</text>`;
+  }
+  if (t > 0.02) s += `<circle class="ghost" cx="200" cy="200" r="${f1(sc)}"/>`;
+  for (let g = -1; g <= 1.001; g += 0.5) { const a = P([g, -1]), b = P([g, 1]), c = P([-1, g]), d = P([1, g]); s += `<line class="ugrid" x1="${f1(a[0])}" y1="${f1(a[1])}" x2="${f1(b[0])}" y2="${f1(b[1])}"/><line class="ugrid" x1="${f1(c[0])}" y1="${f1(c[1])}" x2="${f1(d[0])}" y2="${f1(d[1])}"/>`; }
+  let pts = ''; for (let k = 0; k <= 120; k++) { const a = 2 * Math.PI * k / 120, q = P([Math.cos(a), Math.sin(a)]); pts += (k ? ' ' : '') + f1(q[0]) + ',' + f1(q[1]); }
+  s += `<polyline class="circ" points="${pts}"/>`;
+  const neg2 = t >= 1.5 && t < 2.5 && dd.sy < 0;
+  const lab = t < 0.5 ? ['v₁', 'v₂', 'x'] : t < 1.5 ? ['e₁', 'e₂', 'Vᵀx'] : t < 2.5 ? ['σ₁e₁', (neg2 ? '−' : '') + 'σ₂e₂', 'ΣVᵀx'] : ['σ₁u₁', 'σ₂u₂', 'Ax'];
+  const p1 = P(dd.v1), p2 = P(dd.v2), px = P([Math.cos(S.xa), Math.sin(S.xa)]);
+  s += arrow(200, 200, p1[0], p1[1], 'a-v1', 5) + label(200, 200, p1[0], p1[1], lab[0], 'l-v1', 18);
+  s += arrow(200, 200, p2[0], p2[1], 'a-v2', 5) + label(200, 200, p2[0], p2[1], lab[1], 'l-v2', 18);
+  s += arrow(200, 200, px[0], px[1], 'a-x', 3.4) + `<circle class="pt" cx="${f1(px[0])}" cy="${f1(px[1])}" r="4"/>`;
+  { // подпись x: если рядом подпись v₁ или v₂, отодвигаем её вбок
+    const tip = (q, off) => { const dx = q[0] - 200, dy = q[1] - 200, L = Math.hypot(dx, dy) || 1; return [q[0] + dx / L * off, q[1] + dy / L * off]; };
+    let [lx, ly] = tip(px, 20); const dx = px[0] - 200, dy = px[1] - 200, L = Math.hypot(dx, dy) || 1;
+    for (const q of [tip(p1, 18), tip(p2, 18)]) if (Math.hypot(q[0] - lx, q[1] - ly) < 26) { const sgn = (q[0] - lx) * (-dy / L) + (q[1] - ly) * (dx / L) > 0 ? -1 : 1; lx += sgn * (-dy / L) * 22; ly += sgn * (dx / L) * 22; }
+    if (L >= 9) s += `<text class="l-x" x="${f1(lx)}" y="${f1(ly + 5)}" text-anchor="middle">${lab[2]}</text>`;
+  }
+  return s;
+}
+function mats1() {
+  const dd = dec(), [a, b, c, d] = S.A;
+  const mx = (vals, cls) => `<span class="mx">${vals.map((v, i) => `<span class="${cls ? cls[i] : ''}">${fmt(v, 2)}</span>`).join('')}</span>`;
+  return `<div class="mgrp"><div class="mcol">${mx([a, b, c, d])}<span class="mlab">A</span></div><span class="eq">=</span></div><div class="mgrp"><div class="mcol">${mx([dd.u1[0], dd.u2[0], dd.u1[1], dd.u2[1]], ['c1', 'c2', 'c1', 'c2'])}<span class="mlab">U</span></div>` +
+    `<div class="mcol">${mx([dd.s1, 0, 0, dd.s2], ['c1', 'z', 'z', 'c2'])}<span class="mlab">Σ</span></div>` +
+    `<div class="mcol">${mx([dd.v1[0], dd.v1[1], dd.v2[0], dd.v2[1]], ['c1', 'c1', 'c2', 'c2'])}<span class="mlab">Vᵀ</span></div></div>`;
+}
+
+/* ---------- рисование: шаг 2 ---------- */
+const kNow = () => S.kds[S.ds];
+const log2 = () => S.ds === 'img';
+const rankOf = sv => sv.filter(v => v > sv[0] * 1e-9).length;
+const tickLab = v => v === 0 ? '0' : v >= 1 ? String(Math.round(v)) : String(+v.toPrecision(1));
+function left2() {
+  const D = D2[S.ds], sv = D.sv.s, k = kNow(), J = Math.min(sv.length, log2() ? 30 : 24), log = log2();
+  const x0 = 50, x1 = 388, base = 330, top = 74, w = (x1 - x0) / J;
+  let s = BG + `<text class="axl" x="${x0 - 40}" y="28">сингулярные числа σ₁ ≥ σ₂ ≥ …${log ? ', логарифмическая шкала' : ''}</text>`;
+  let H, ticks = [];
+  if (log) {
+    const lo = Math.log10(Math.max(sv[J - 1], sv[0] * 1e-4)) - 0.15, hi = Math.log10(sv[0]);
+    H = v => clamp((Math.log10(Math.max(v, 1e-12)) - lo) / (hi - lo), 0, 1);
+    for (let p = Math.ceil(lo); p <= Math.floor(hi); p++) ticks.push([Math.pow(10, p), H(Math.pow(10, p))]);
+  } else {
+    H = v => v / sv[0];
+    const st = niceStep(sv[0], 4); for (let v = 0; v <= sv[0] + 1e-9; v += st) ticks.push([v, H(v)]);
+  }
+  for (const [v, h] of ticks) {
+    const y = base - h * (base - top);
+    s += `<line class="grid" x1="${x0}" y1="${f1(y)}" x2="${x1}" y2="${f1(y)}"/><text class="tick" x="${x0 - 6}" y="${f1(y + 4)}" text-anchor="end">${tickLab(v)}</text>`;
+  }
+  s += `<line class="axis" x1="${x0}" y1="${base}" x2="${x1}" y2="${base}"/>`;
+  for (let j = 0; j < J; j++) {
+    const h = Math.max(1.5, H(sv[j]) * (base - top)), x = x0 + j * w + w * 0.14, bw = w * 0.72;
+    s += `<rect class="hit" x="${f1(x0 + j * w)}" y="${top - 20}" width="${f1(w)}" height="${base - top + 40}" data-k="${j + 1}"/>`;
+    s += `<rect class="sbar${j < k ? '' : ' off'}" x="${f1(x)}" y="${f1(base - h)}" width="${f1(bw)}" height="${f1(h)}" rx="1.5" pointer-events="none"/>`;
+    if (J <= 12) s += `<text class="sval" x="${f1(x + bw / 2)}" y="${f1(base - h - 6)}" text-anchor="middle">${sv[j] < 0.05 ? '0' : sv[j].toFixed(sv[j] < 100 ? 1 : 0)}</text>`;
+    if (J <= 12 || j === 0 || (j + 1) % 4 === 0) s += `<text class="tick" x="${f1(x + bw / 2)}" y="${base + 16}" text-anchor="middle">${j + 1}</text>`;
+  }
+  if (k < J) { const x = x0 + k * w; s += `<line class="kmark" x1="${f1(x)}" y1="${top - 12}" x2="${f1(x)}" y2="${base}"/><text class="sval" x="${f1(x + 4)}" y="${top - 16}">k = ${k}</text>`; }
+  else s += `<text class="sval" x="${x1}" y="${top - 16}" text-anchor="end">k = ${k}${k > J ? ' (дальше края графика)' : ''}</text>`;
+  s += `<text class="axl" x="${(x0 + x1) / 2}" y="${base + 40}" text-anchor="middle">номер слоя; синие входят в A_k</text>`;
+  return s;
+}
+function right2() {
+  const D = D2[S.ds], k = kNow(), n = D.A.length, d = D.A[0].length;
+  if (S.ds === 'rat') return BG + ratTable(D, k);
+  const v = S.view;
+  const M = v === 'approx' ? approx(D, k) : v === 'layer' ? approx(D, k, k - 1) : v === 'sig' ? SIG : D.A;
+  const gray = S.ds === 'img' && v !== 'layer', vmax = v === 'layer' ? (maxAbs(M) || 1) : 1.8;
+  const url = matURL(M, gray ? 'gray' : 'div', vmax);
+  let s = BG;
+  if (v === 'layer') {
+    const x0 = 54, y0 = 50, W = 324, u = D.sv.U[k - 1], vv = D.sv.V[k - 1], mu = maxAbs(u) || 1, mv = maxAbs(vv) || 1, cw = W / d, rh = W / n;
+    s += `<image href="${url}" x="${x0}" y="${y0}" width="${W}" height="${W}" preserveAspectRatio="none"/><rect class="frame" x="${x0}" y="${y0}" width="${W}" height="${W}"/>`;
+    s += `<line class="axis" x1="${x0}" y1="28" x2="${x0 + W}" y2="28"/><line class="axis" x1="28" y1="${y0}" x2="28" y2="${y0 + W}"/>`;
+    for (let j = 0; j < d; j++) { const h = vv[j] / mv * 17; s += `<rect class="${h >= 0 ? 'bar-p' : 'bar-n'}" x="${(x0 + j * cw).toFixed(2)}" y="${(h >= 0 ? 28 - h : 28).toFixed(2)}" width="${Math.max(0.6, cw - 0.7).toFixed(2)}" height="${Math.abs(h).toFixed(2)}"/>`; }
+    for (let i = 0; i < n; i++) { const w = u[i] / mu * 17; s += `<rect class="${w >= 0 ? 'bar-p' : 'bar-n'}" x="${(w >= 0 ? 28 : 28 + w).toFixed(2)}" y="${(y0 + i * rh).toFixed(2)}" width="${Math.abs(w).toFixed(2)}" height="${Math.max(0.6, rh - 0.7).toFixed(2)}"/>`; }
+    s += `<text class="cap" x="${x0 - 8}" y="22" text-anchor="end">v${sub(k)}ᵀ</text><text class="cap" x="28" y="${y0 + W + 18}" text-anchor="middle">u${sub(k)}</text><text class="axl" x="${x0 + W}" y="${y0 + W + 18}" text-anchor="end">слой ${k} = столбец × строка</text>`;
+  } else {
+    const x0 = 36, y0 = 52, W = 328;
+    const cap = v === 'approx' ? `A${sub(k)}: ${firstK(k)}, ${int(k * (n + d + 1))} ${plural(k * (n + d + 1), 'число', 'числа', 'чисел')} из ${int(n * d)}` : v === 'sig' ? 'Сигнал S без шума (ранг 3)' : `Исходная матрица A: ${int(n * d)} чисел`;
+    s += `<text class="cap" x="${x0}" y="32">${cap}</text>`;
+    s += `<image href="${url}" x="${x0}" y="${y0}" width="${W}" height="${W}" preserveAspectRatio="none"/><rect class="frame" x="${x0}" y="${y0}" width="${W}" height="${W}"/>`;
+  }
+  return s;
+}
+const firstK = k => k === 1 ? 'только первый слой' : `первые ${k} ${plural(k, 'слой', 'слоя', 'слоёв')}`;
+function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c; }
+function ratTable(D, k) {
+  const v = S.view === 'sig' ? 'approx' : S.view, x0 = 108, y0 = 84, c = 67;
+  const M = v === 'approx' ? approx(D, k) : v === 'layer' ? approx(D, k, k - 1) : D.A, mx = maxAbs(M) || 1;
+  const cols = ['Боевик 1', 'Боевик 2', 'Драма 1', 'Драма 2'];
+  const cap = v === 'approx' ? `R${sub(k)}: ${firstK(k)}` : v === 'layer' ? `Слой ${k}: σ${sub(k)}u${sub(k)}v${sub(k)}ᵀ, σ${sub(k)} = ${fmt(D.sv.s[k - 1], 1)}` : 'Исходная таблица оценок R';
+  let s = `<text class="cap" x="16" y="30">${cap}</text>`;
+  cols.forEach((t, j) => { s += `<text class="rowl" x="${x0 + j * c + c / 2}" y="${y0 - 10}" text-anchor="middle">${t}</text>`; });
+  for (let i = 0; i < 4; i++) {
+    s += `<text class="rowl" x="${x0 - 10}" y="${y0 + i * c + c / 2 + 4}" text-anchor="end">Зритель ${i + 1}</text>`;
+    for (let j = 0; j < 4; j++) {
+      const val = M[i][j], st = v === 'layer' ? `fill:color-mix(in oklab,var(${val >= 0 ? '--hpos' : '--hneg'}) ${Math.round(Math.abs(val) / mx * 50)}%,var(--plot))` : `fill:color-mix(in oklab,var(--est) ${Math.round(clamp(val / 5, 0, 1) * 50)}%,var(--plot))`;
+      s += `<rect x="${x0 + j * c + 1}" y="${y0 + i * c + 1}" width="${c - 2}" height="${c - 2}" rx="3" style="${st}"/>`;
+      s += `<text class="cell-t" x="${x0 + j * c + c / 2}" y="${y0 + i * c + c / 2 + 6}" text-anchor="middle">${v === 'orig' ? Math.round(val) : fmt(val, 1)}</text>`;
+      if (v === 'approx') s += `<text class="cell-o" x="${x0 + j * c + c - 6}" y="${y0 + i * c + 14}" text-anchor="end">${D.A[i][j]}</text>`;
+    }
+  }
+  const yb = y0 + 4 * c;
+  if (v === 'layer') {
+    const u = D.sv.U[k - 1], vv = D.sv.V[k - 1], vec = a => '(' + Array.from(a, x => fmt(x, 2)).join('; ') + ')';
+    s += `<text class="sval" x="16" y="${yb + 20}">u${sub(k)} = ${vec(u)}</text><text class="sval" x="16" y="${yb + 38}">v${sub(k)} = ${vec(vv)}</text>`;
+  } else if (v === 'approx') {
+    const err = Math.sqrt(D.sv.s.slice(k).reduce((p, x) => p + x * x, 0));
+    s += `<text class="sval" x="16" y="${yb + 22}">в углу — исходная оценка; ошибка ‖R − R${sub(k)}‖ = ${fmt(err, 2)}</text>`;
+  }
+  return s;
+}
+
+/* ---------- рисование: шаг 3 ---------- */
+const SC3 = 5.2;
+function stats3() {
+  const P = P3(), mo = moments(P, false), n = P.length, tot = (mo.xx + mo.yy) / (n - 1);
+  const va = th => { const c = Math.cos(th * Math.PI / 180), s = Math.sin(th * Math.PI / 180); return (mo.xx * c * c + 2 * mo.xy * c * s + mo.yy * s * s) / (n - 1); };
+  const thStar = ((Math.atan2(mo.w1[1], mo.w1[0]) * 180 / Math.PI) % 180 + 180) % 180;
+  return { P, mo, n, tot, va, thStar, l1: mo.l1 / (n - 1), l2: mo.l2 / (n - 1) };
+}
+function left3() {
+  const st = stats3(), X = x => 200 + SC3 * x, Y = y => 200 - SC3 * y;
+  let s = BG;
+  for (let v = -30; v <= 30; v += 10) { if (!v) continue; s += `<line class="grid" x1="${X(v)}" y1="0" x2="${X(v)}" y2="400"/><line class="grid" x1="0" y1="${Y(v)}" x2="400" y2="${Y(v)}"/>`; }
+  s += `<line class="axis" x1="0" y1="200" x2="400" y2="200"/><line class="axis" x1="200" y1="0" x2="200" y2="400"/>`;
+  for (const v of [-20, 20]) s += `<text class="tick" x="${X(v)}" y="214" text-anchor="middle">${fmt(v, 0)}</text><text class="tick" x="194" y="${Y(v) + 4}" text-anchor="end">${fmt(v, 0)}</text>`;
+  s += `<text class="axl" x="392" y="390" text-anchor="end">по горизонтали: математика</text><text class="axl" x="10" y="20">по вертикали: физика</text>`;
+  const c = Math.cos(S.th * Math.PI / 180), sn = Math.sin(S.th * Math.PI / 180);
+  s += `<line class="tax" x1="${f1(X(-60 * c))}" y1="${f1(Y(-60 * sn))}" x2="${f1(X(60 * c))}" y2="${f1(Y(60 * sn))}"/>`;
+  let res = '', prj = '', pts = '';
+  st.P.forEach((p, i) => {
+    const z = p[0] * c + p[1] * sn, q = [z * c, z * sn];
+    res += `<line class="res" data-i="${i}" x1="${f1(X(p[0]))}" y1="${f1(Y(p[1]))}" x2="${f1(X(q[0]))}" y2="${f1(Y(q[1]))}"/>`;
+    prj += `<circle class="prj" data-i="${i}" cx="${f1(X(q[0]))}" cy="${f1(Y(q[1]))}" r="2.4"/>`;
+    pts += `<circle class="pt" data-i="${i}" cx="${f1(X(p[0]))}" cy="${f1(Y(p[1]))}" r="3.8"/>`;
+  });
+  s += res + prj + pts;
+  if (S.showAx) {
+    const a = 2 * Math.sqrt(st.l1), b = 2 * Math.sqrt(st.l2), w1 = st.mo.w1, w2 = st.mo.w2;
+    s += arrow(200, 200, X(a * w1[0]), Y(a * w1[1]), 'a-v2', 4.5) + label(200, 200, X(a * w1[0]), Y(a * w1[1]), 'w₁', 'l-v2', 14);
+    s += arrow(200, 200, X(b * w2[0]), Y(b * w2[1]), 'a-v2', 4.5) + label(200, 200, X(b * w2[0]), Y(b * w2[1]), 'w₂', 'l-v2', 14);
+  }
+  const tl = Math.min(170 / (SC3 * Math.max(Math.abs(c), 1e-6)), 160 / (SC3 * Math.max(Math.abs(sn), 1e-6))) * 0.93;
+  s += `<text class="l-v1" x="${f1(X(tl * c) + 6 * sn)}" y="${f1(Y(tl * sn) - 8 * c + (sn > 0.8 ? 0 : 0))}" text-anchor="middle">w</text>`;
+  return s;
+}
+function right3() {
+  const st = stats3(), x0 = 52, x1 = 384, yb = 222, yt = 46;
+  const ymax = Math.ceil(st.tot * 1.12 / niceStep(st.tot * 1.12, 4)) * niceStep(st.tot * 1.12, 4);
+  const X = th => x0 + (x1 - x0) * th / 180, Y = v => yb - (yb - yt) * v / ymax;
+  let s = BG + `<text class="axl" x="10" y="26">дисперсия, баллы²</text>`;
+  const ys = niceStep(ymax, 4);
+  for (let v = 0; v <= ymax + 1e-9; v += ys) s += `<line class="grid" x1="${x0}" y1="${f1(Y(v))}" x2="${x1}" y2="${f1(Y(v))}"/><text class="tick" x="${x0 - 6}" y="${f1(Y(v) + 4)}" text-anchor="end">${Math.round(v)}</text>`;
+  s += `<line class="axis" x1="${x0}" y1="${yb}" x2="${x1}" y2="${yb}"/>`;
+  for (const t of [0, 45, 90, 135, 180]) s += `<text class="tick" x="${X(t)}" y="${yb + 16}" text-anchor="middle">${t}°</text>`;
+  s += `<text class="axl" x="${(x0 + x1) / 2}" y="${yb + 34}" text-anchor="middle">угол оси θ</text>`;
+  let pa = '', pe = '';
+  for (let t = 0; t <= 180; t += 2) { const a = st.va(t); pa += `${f1(X(t))},${f1(Y(a))} `; pe += `${f1(X(t))},${f1(Y(st.tot - a))} `; }
+  s += `<line class="cur-t" x1="${x0}" y1="${f1(Y(st.tot))}" x2="${x1}" y2="${f1(Y(st.tot))}"/><text class="tick" x="${x1}" y="${f1(Y(st.tot) - 6)}" text-anchor="end">сумма = ${st.tot.toFixed(0)}</text>`;
+  s += `<polyline class="cur-a" points="${pa.trim()}"/><polyline class="cur-e" points="${pe.trim()}"/>`;
+  s += `<line class="kmark" x1="${f1(X(st.thStar))}" y1="${yt - 6}" x2="${f1(X(st.thStar))}" y2="${yb}"/><text class="l-v2" x="${f1(X(st.thStar) + 5)}" y="${yt - 4}" style="font-size:13px">w₁</text>`;
+  const a = st.va(S.th);
+  s += `<line class="mark" x1="${f1(X(S.th))}" y1="${yt - 6}" x2="${f1(X(S.th))}" y2="${yb}"/><circle class="dot-a" cx="${f1(X(S.th))}" cy="${f1(Y(a))}" r="5"/><circle class="dot-e" cx="${f1(X(S.th))}" cy="${f1(Y(st.tot - a))}" r="5"/>`;
+  // полоса: координаты на оси
+  const yS = 340, R = 40, sx = 170 / R, c = Math.cos(S.th * Math.PI / 180), sn = Math.sin(S.th * Math.PI / 180);
+  s += `<line class="divl" x1="10" y1="268" x2="390" y2="268"/><text class="cap" x="16" y="292">Координата каждого школьника на оси w</text><text class="axl" x="16" y="310">одно число вместо двух; разброс этих чисел = ${a.toFixed(0)}</text>`;
+  s += `<line class="axis" x1="30" y1="${yS}" x2="370" y2="${yS}"/>`;
+  for (const v of [-40, -20, 0, 20, 40]) s += `<line class="axis" x1="${200 + v * sx}" y1="${yS - 4}" x2="${200 + v * sx}" y2="${yS + 4}"/><text class="tick" x="${200 + v * sx}" y="${yS + 30}" text-anchor="middle">${fmt(v, 0)}</text>`;
+  st.P.forEach((p, i) => { const z = clamp(p[0] * c + p[1] * sn, -R, R); s += `<circle class="prj" data-i="${i}" cx="${f1(200 + z * sx)}" cy="${yS + ((i * 7) % 5 - 2) * 3}" r="3.6"/>`; });
+  return s;
+}
+
+/* ---------- рисование: шаг 4 ---------- */
+const X4 = x => 40 + 3.42 * x, Y4 = y => 362 - 3.42 * y;
+function data4() { return S.outlier ? RAW.concat([S.out.slice()]) : RAW; }
+function stats4() {
+  const P = data4(), n = P.length, mc = moments(P, true);
+  if (S.center) {
+    const Z = P.map(p => { const a = p[0] - mc.m[0], b = p[1] - mc.m[1]; return [a * mc.w1[0] + b * mc.w1[1], a * mc.w2[0] + b * mc.w2[1]]; });
+    return { P, n, Z, mc, o: mc.m, v1: mc.w1, v2: mc.w2, s1: Math.sqrt(mc.l1), s2: Math.sqrt(mc.l2), l1: mc.l1 / (n - 1), l2: mc.l2 / (n - 1) };
+  }
+  const mu = moments(P, false), Z = P.map(p => [p[0] * mu.w1[0] + p[1] * mu.w1[1], p[0] * mu.w2[0] + p[1] * mu.w2[1]]);
+  return { P, n, Z, mc, o: [0, 0], v1: mu.w1, v2: mu.w2, s1: Math.sqrt(mu.l1), s2: Math.sqrt(mu.l2), l1: mu.l1 / (n - 1), l2: mu.l2 / (n - 1) };
+}
+function left4() {
+  const st = stats4();
+  let s = BG;
+  for (let v = 20; v <= 100; v += 20) s += `<line class="grid" x1="${X4(v)}" y1="${Y4(0)}" x2="${X4(v)}" y2="${Y4(102)}"/><line class="grid" x1="${X4(0)}" y1="${Y4(v)}" x2="${X4(102)}" y2="${Y4(v)}"/>`;
+  s += `<line class="axis" x1="${X4(0)}" y1="${Y4(0)}" x2="${X4(103)}" y2="${Y4(0)}"/><line class="axis" x1="${X4(0)}" y1="${Y4(0)}" x2="${X4(0)}" y2="${Y4(103)}"/>`;
+  for (let v = 0; v <= 100; v += 20) s += `<text class="tick" x="${X4(v)}" y="${Y4(0) + 15}" text-anchor="middle">${v}</text>` + (v ? `<text class="tick" x="${X4(0) - 6}" y="${Y4(v) + 4}" text-anchor="end">${v}</text>` : '');
+  s += `<text class="axl" x="392" y="394" text-anchor="end">математика, баллы</text><text class="axl" x="${X4(0) + 6}" y="16">физика, баллы</text>`;
+  const L = 160, m = st.mc.m;
+  if (S.center) {
+    let e = ''; for (let k = 0; k <= 90; k++) { const a = 2 * Math.PI * k / 90, ca = 2 * Math.sqrt(st.l1) * Math.cos(a), sa = 2 * Math.sqrt(st.l2) * Math.sin(a); e += `${f1(X4(m[0] + ca * st.v1[0] + sa * st.v2[0]))},${f1(Y4(m[1] + ca * st.v1[1] + sa * st.v2[1]))} `; }
+    s += `<polygon class="ell" points="${e.trim()}"/>`;
+    s += `<line class="tax soft" x1="${f1(X4(m[0] - L * st.v1[0]))}" y1="${f1(Y4(m[1] - L * st.v1[1]))}" x2="${f1(X4(m[0] + L * st.v1[0]))}" y2="${f1(Y4(m[1] + L * st.v1[1]))}"/>`;
+  } else {
+    const mc = st.mc;
+    s += `<line class="tax gh" x1="${f1(X4(m[0] - L * mc.w1[0]))}" y1="${f1(Y4(m[1] - L * mc.w1[1]))}" x2="${f1(X4(m[0] + L * mc.w1[0]))}" y2="${f1(Y4(m[1] + L * mc.w1[1]))}"/>`;
+    s += `<line class="tax soft" x1="${f1(X4(0))}" y1="${f1(Y4(0))}" x2="${f1(X4(L * st.v1[0]))}" y2="${f1(Y4(L * st.v1[1]))}"/>`;
+  }
+  st.P.forEach((p, i) => {
+    if (i >= NS) s += `<circle class="outr" cx="${f1(X4(p[0]))}" cy="${f1(Y4(p[1]))}" r="11"/><circle class="outl" data-i="${i}" cx="${f1(X4(p[0]))}" cy="${f1(Y4(p[1]))}" r="6"/>`;
+    else s += `<circle class="pt" data-i="${i}" cx="${f1(X4(p[0]))}" cy="${f1(Y4(p[1]))}" r="3.6"/>`;
+  });
+  s += `<path class="meanx" d="M${f1(X4(m[0]) - 6)},${f1(Y4(m[1]) - 6)}L${f1(X4(m[0]) + 6)},${f1(Y4(m[1]) + 6)}M${f1(X4(m[0]) - 6)},${f1(Y4(m[1]) + 6)}L${f1(X4(m[0]) + 6)},${f1(Y4(m[1]) - 6)}"/>`;
+  s += `<text class="tick" x="${f1(X4(m[0]) + 9)}" y="${f1(Y4(m[1]) + 16)}">среднее</text>`;
+  const o = st.o, nm = S.center ? ['w₁', 'w₂'] : ['v₁', 'v₂'];
+  const a = S.center ? 2 * Math.sqrt(st.l1) : st.s1 / Math.sqrt(st.n), b = S.center ? 2 * Math.sqrt(st.l2) : st.s2 / Math.sqrt(st.n);
+  const A1 = [X4(o[0] + a * st.v1[0]), Y4(o[1] + a * st.v1[1])], A2 = [X4(o[0] + b * st.v2[0]), Y4(o[1] + b * st.v2[1])];
+  s += arrow(X4(o[0]), Y4(o[1]), A1[0], A1[1], 'a-v1', 4.5) + label(X4(o[0]), Y4(o[1]), A1[0], A1[1], nm[0], 'l-v1', 14);
+  s += arrow(X4(o[0]), Y4(o[1]), A2[0], A2[1], 'a-v2', 4.5) + label(X4(o[0]), Y4(o[1]), A2[0], A2[1], nm[1], 'l-v2', 14);
+  return s;
+}
+function right4() {
+  const st = stats4(), Z = st.Z, n = Z.length;
+  let c1 = 0, c2 = 0; for (const z of Z) { c1 += z[0]; c2 += z[1]; } c1 /= n; c2 /= n;
+  let H = 8; for (const z of Z) H = Math.max(H, Math.abs(z[0] - c1) * 1.12, Math.abs(z[1] - c2) * 1.12);
+  const X = v => 210 + (v - c1) * 170 / H, Y = v => 196 - (v - c2) * 170 / H, step = niceStep(2 * H, 5);
+  let s = BG;
+  for (let v = Math.ceil((c1 - H) / step) * step; v <= c1 + H; v += step) s += `<line class="grid" x1="${f1(X(v))}" y1="26" x2="${f1(X(v))}" y2="366"/><text class="tick" x="${f1(X(v))}" y="382" text-anchor="middle">${fmt(v, 0)}</text>`;
+  for (let v = Math.ceil((c2 - H) / step) * step; v <= c2 + H; v += step) s += `<line class="grid" x1="40" y1="${f1(Y(v))}" x2="380" y2="${f1(Y(v))}"/><text class="tick" x="34" y="${f1(Y(v) + 4)}" text-anchor="end">${fmt(v, 0)}</text>`;
+  if (Math.abs(c2) < H) s += `<line class="axis" x1="40" y1="${f1(Y(0))}" x2="380" y2="${f1(Y(0))}"/>`;
+  if (Math.abs(c1) < H) s += `<line class="axis" x1="${f1(X(0))}" y1="26" x2="${f1(X(0))}" y2="366"/>`;
+  s += `<text class="l-v1" x="384" y="398" text-anchor="end">z₁</text><text class="l-v2" x="10" y="20">z₂</text>`;
+  Z.forEach((z, i) => { s += i >= NS ? `<circle class="outl" data-i="${i}" cx="${f1(X(z[0]))}" cy="${f1(Y(z[1]))}" r="6"/>` : `<circle class="pt" data-i="${i}" cx="${f1(X(z[0]))}" cy="${f1(Y(z[1]))}" r="3.6"/>`; });
+  return s;
+}
+
+/* ---------- рисование: шаг 5 ---------- */
+function left5() {
+  const { lam } = cloud5(), k = S.k3, tot = lam[0] + lam[1] + lam[2];
+  let s = BG + `<text class="ttl" x="16" y="26">Это облако: 3 признака</text>`;
+  const base = 152, Hh = 92, xs = [92, 202, 312], bw = 64;
+  s += `<line class="axis" x1="40" y1="${base}" x2="372" y2="${base}"/>`;
+  let cum = 0;
+  lam.forEach((l, j) => {
+    cum += l; const h = Math.max(1.5, l / lam[0] * Hh), x = xs[j] - bw / 2;
+    s += `<rect class="sbar${j < k ? '' : ' off'}" x="${x}" y="${f1(base - h)}" width="${bw}" height="${f1(h)}" rx="2"/>`;
+    s += `<text class="sval" x="${xs[j]}" y="${f1(base - h - 6)}" text-anchor="middle">λ${sub(j + 1)} = ${l.toFixed(2)}</text>`;
+    s += `<text class="${['l-v1', 'l-v2', 'l-w3'][j]}" x="${xs[j]}" y="${base + 18}" text-anchor="middle">w${sub(j + 1)}</text>`;
+    s += `<text class="tick" x="${xs[j]}" y="${base + 34}" text-anchor="middle">${j < 2 ? 'первые ' + (j + 1) : 'все 3'}: ${pct(cum / tot)}</text>`;
+  });
+  s += `<line class="divl" x1="10" y1="206" x2="390" y2="206"/>`;
+  s += `<text class="ttl" x="16" y="230">Наклоны многофакторной модели: 12 × 100</text><text class="axl" x="16" y="248">сингулярные числа, без центрирования</text>`;
+  const b2 = 362, H2 = 88, x0 = 40, w = 336 / 12;
+  s += `<line class="axis" x1="${x0}" y1="${b2}" x2="${x0 + 336}" y2="${b2}"/>`;
+  SLOPES.forEach((v, j) => {
+    const h = Math.max(1.5, v / SLOPES[0] * H2), x = x0 + j * w + w * 0.15;
+    s += `<rect class="sbar${j < 2 ? '' : ' off'}" x="${f1(x)}" y="${f1(b2 - h)}" width="${f1(w * 0.7)}" height="${f1(h)}" rx="1.5"/>`;
+    s += `<text class="sval" x="${f1(x + w * 0.35)}" y="${f1(b2 - h - 5)}" text-anchor="middle" style="font-size:10px">${v.toFixed(1)}</text>`;
+    s += `<text class="tick" x="${f1(x + w * 0.35)}" y="${b2 + 15}" text-anchor="middle">${j + 1}</text>`;
+  });
+  return s;
+}
+function right5() {
+  const { P, lam, w } = cloud5(), k = S.k3;
+  let s = BG;
+  const labs = ['x₁', 'x₂', 'x₃'];
+  for (let q = 0; q < 3; q++) {
+    const e = [0, 0, 0]; e[q] = 1;
+    s += seg3([0, 0, 0], sc3(e, -2.7), 'axis neg') + seg3([0, 0, 0], sc3(e, 2.7), 'axis');
+    const p = proj(sc3(e, 3.0)); s += `<text class="axl3" x="${f1(p[0])}" y="${f1(p[1] + 4)}" text-anchor="middle">${labs[q]}</text>`;
+  }
+  const e1 = 2.1 * Math.sqrt(lam[0]), e2 = 2.1 * Math.sqrt(lam[1]);
+  if (k === 2) {
+    const u = w[0], v = w[1];
+    s += poly3([add3(sc3(u, e1), sc3(v, e2)), add3(sc3(u, -e1), sc3(v, e2)), add3(sc3(u, -e1), sc3(v, -e2)), add3(sc3(u, e1), sc3(v, -e2))], 'plane');
+    for (let t = -2; t <= 2; t++) { if (!t) continue; s += seg3(add3(sc3(u, t * e1 / 3), sc3(v, -e2)), add3(sc3(u, t * e1 / 3), sc3(v, e2)), 'plgrid') + seg3(add3(sc3(v, t * e2 / 3), sc3(u, -e1)), add3(sc3(v, t * e2 / 3), sc3(u, e1)), 'plgrid'); }
+  }
+  if (k === 1) s += seg3(sc3(w[0], -1.3 * e1), sc3(w[0], 1.3 * e1), 'fline');
+  const items = P.map((p, i) => ({ i, p, q: proj(p) })).sort((a, b) => b.q[2] - a.q[2]);
+  for (const it of items) {
+    const op = clamp(0.6 + 0.4 * (-it.q[2] / 3), 0.35, 1);
+    if (k < 3) { let r = [0, 0, 0]; for (let j = 0; j < k; j++) r = add3(r, sc3(w[j], dot(it.p, w[j]))); s += seg3(it.p, r, 'res', `style="opacity:${op.toFixed(2)}"`); }
+    s += `<circle class="pt" cx="${f1(it.q[0])}" cy="${f1(it.q[1])}" r="3" style="opacity:${op.toFixed(2)}"/>`;
+  }
+  const o = proj([0, 0, 0]), cls = ['a-v1', 'a-v2', 'a-w3'], lcl = ['l-v1', 'l-v2', 'l-w3'];
+  for (let j = 0; j < 3; j++) { const L = Math.max(0.35, 2 * Math.sqrt(lam[j])), q = proj(sc3(w[j], L)); s += arrow(o[0], o[1], q[0], q[1], cls[j], 4.5) + label(o[0], o[1], q[0], q[1], `w${sub(j + 1)}`, lcl[j], 13); }
+  return s;
+}
+
+/* ---------- тексты ---------- */
+const M = s => `<span class="m">${s}</span>`;
+const STEPS = [
+  { nav: 'Поворот и растяжение', title: 'Что матрица делает с плоскостью',
+    lt: 'Вход: векторы x', lh: 'перетащи точку x по окружности', rt: 'Образ: что делает с ними A', rh: '',
+    formula: () => `A = U Σ V<sup>⊤</sup>, &nbsp; A<span class="c1">v<sub>1</sub></span> = σ<sub>1</sub><span class="c1">u<sub>1</sub></span>, &nbsp; A<span class="c2">v<sub>2</sub></span> = σ<sub>2</sub><span class="c2">u<sub>2</sub></span>`,
+    html: () => `<p>Матрица 2 × 2 переводит каждый вектор ${M('x')} плоскости в вектор ${M('Ax')}. По SVD любое такое преобразование складывается из трёх простых: поворот ${M('V<sup>⊤</sup>')}, растяжение вдоль осей ${M('Σ')} и ещё один поворот ${M('U')}.</p>
+      <p>Нажми «Проиграть по шагам» и смотри на единичную окружность справа. После ${M('V<sup>⊤</sup>')} направления ${M('v<sub>1</sub>')} и ${M('v<sub>2</sub>')} встают на оси координат. ${M('Σ')} растягивает первую ось в ${M('σ<sub>1</sub>')} раз, вторую в ${M('σ<sub>2</sub>')} раз, и окружность становится эллипсом. ${M('U')} поворачивает эллипс на место, его полуоси равны ${M('σ<sub>1</sub>u<sub>1</sub>')} и ${M('σ<sub>2</sub>u<sub>2</sub>')}.</p>
+      <p>Поводи точку ${M('x')} слева. Длина ${M('Ax')} больше всего при ${M('x = v<sub>1</sub>')} и равна ${M('σ<sub>1</sub>')}, меньше всего при ${M('x = v<sub>2</sub>')} и равна ${M('σ<sub>2</sub>')}. Попробуй готовые матрицы: у симметричной оба поворота взаимно обратны, у матрицы ранга 1 эллипс сплющивается в отрезок (${M('σ<sub>2</sub> = 0')}), а поворот ничего не растягивает (${M('σ<sub>1</sub> = σ<sub>2</sub> = 1')}). Если определитель отрицательный, преобразование ещё и отражает плоскость: в анимации это видно на шаге растяжения.</p>` },
+  { nav: 'Сумма слоёв', title: 'Матрица как сумма слоёв',
+    lt: 'Сингулярные числа', lh: 'нажми на столбик, чтобы выбрать k', rt: '', rh: '',
+    formula: () => `A = σ<sub>1</sub>u<sub>1</sub>v<sub>1</sub><sup>⊤</sup> + σ<sub>2</sub>u<sub>2</sub>v<sub>2</sub><sup>⊤</sup> + … , &nbsp; ‖A − A<sub>k</sub>‖<sup>2</sup> = σ<sup>2</sup><sub>k+1</sub> + … + σ<sup>2</sup><sub>r</sub>`,
+    html: () => {
+      let p = `<p>SVD раскладывает любую прямоугольную матрицу в сумму слоёв. Каждый слой ${M('σ<sub>k</sub>u<sub>k</sub>v<sub>k</sub><sup>⊤</sup>')} — столбец, умноженный на строку, то есть матрица ранга 1. Слои идут по убыванию веса ${M('σ<sub>k</sub>')} (слева).</p>
+        <p>Если оставить первые ${M('k')} слоёв, получится ${M('A<sub>k</sub>')}. По теореме Эккарта–Янга это лучшее приближение ранга ${M('k')}, а его ошибка складывается из выброшенных ${M('σ')}. Хранить ${M('A<sub>k</sub>')} дешевле: ${M('k(n + d + 1)')} чисел вместо ${M('n·d')}.</p>`;
+      if (S.ds === 'img') p += `<p>Двигай ${M('k')}. Сначала проявляются крупные пятна, потом детали. Небу и земле хватает одного слоя: они меняются только по вертикали. Круги и наклонные края крыши требуют многих слоёв. Ненулевых сингулярных чисел у картинки всего ${rankOf(D2.img.sv.s)}, потому что многие её строки и столбцы повторяются: при ${M('k = ' + rankOf(D2.img.sv.s))} она восстанавливается точно. Режим «Слой k» показывает одно слагаемое: сверху строка ${M('v<sub>k</sub><sup>⊤</sup>')}, слева столбец ${M('u<sub>k</sub>')}, внутри их произведение.</p>`;
+      if (S.ds === 'rat') p += `<p>Таблица оценок из конспекта: фильмы 1–2 боевики, 3–4 драмы. Её ранг равен 2, поэтому ${M('σ<sub>3</sub> = σ<sub>4</sub> = 0')}, и двух слоёв хватает, чтобы восстановить таблицу точно. Включи «Слой k»: первый слой отвечает за общую популярность фильма, второй противопоставляет боевики драмам.</p>`;
+      if (S.ds === 'noise') p += `<p>Здесь матрица — сигнал ранга 3 плюс шум. Сигнал сосредоточен в трёх больших ${M('σ')}, а шум размазан по всем понемногу и даёт ровный «пол». При ${M('k = 3')} приближение ближе к сигналу, чем сама матрица: большая часть шума выброшена. Увеличь шум, и третий слой утонет в «поле». Так в дипломе ищется плоскость индексов по шумной матрице наклонов.</p>`;
+      return p;
+    } },
+  { nav: 'Главная ось', title: 'PCA: направление наибольшего разброса',
+    lt: 'Облако и пробная ось', lh: 'перетащи по графику, чтобы повернуть ось', rt: 'Разброс вдоль оси и поперёк', rh: '',
+    formula: () => `w<sub>1</sub> = arg max<sub>‖w‖=1</sub> Var(X̃w) = arg min<sub>‖w‖=1</sub> Σ<sub>i</sub> ‖x̃<sub>i</sub> − (x̃<sub>i</sub><sup>⊤</sup>w)w‖<sup>2</sup>`,
+    html: () => `<p>Точки — 40 школьников: отклонения их оценок по математике и физике от средних. Оценки связаны, поэтому облако вытянуто. PCA ищет ось, вдоль которой облако разбросано сильнее всего.</p>
+      <p>Покрути ось. Справа две кривые: <span class="c1">разброс проекций</span> на ось и <span class="c3">разброс остатков</span>, то есть пунктирных отрезков от точек до оси. Их сумма не меняется (теорема Пифагора), поэтому там, где первая кривая максимальна, вторая минимальна. Обе цели PCA, максимум разброса и минимум ошибки, дают одну и ту же ось.</p>
+      <p>Эта ось — первый собственный вектор ковариационной матрицы, разброс вдоль неё равен ${M('λ<sub>1</sub>')}, а поперёк ${M('λ<sub>2</sub>')}. Внизу справа то, что остаётся от данных, если описывать каждого школьника одним числом — его координатой на оси.</p>` },
+  { nav: 'Центрирование', title: 'PCA через SVD: зачем вычитать среднее',
+    lt: 'Исходные баллы', lh: '', rt: '', rh: '',
+    formula: () => `X̃ = U Σ V<sup>⊤</sup>, &nbsp; <span class="t">оси —</span> <span class="c1">v<sub>j</sub></span>, &nbsp; <span class="t">координаты</span> Z = X̃V = UΣ, &nbsp; λ<sub>j</sub> = σ<sub>j</sub><sup>2</sup>/(n − 1)`,
+    html: () => `<p>Те же школьники в исходных баллах. PCA считают через SVD центрированной матрицы данных: главные оси — правые сингулярные векторы, новые координаты — ${M('UΣ')}. Справа облако в новых координатах. Это то же облако, только сдвинутое и повёрнутое, и его координаты уже не коррелируют.</p>
+      <p>Отключи центрирование. SVD исходной матрицы ищет прямую через ноль, поэтому первая ось смотрит из нуля на облако, а не вдоль его разброса (серый пунктир — ось с центрированием). Новые координаты снова коррелируют. Иногда так и нужно: в дипломе плоскость наклонов обязана проходить через ноль, и там берут SVD без центрирования.</p>
+      <p>Добавь выброс и потаскай его. Один далёкий школьник заметно поворачивает первую ось: дисперсия чувствительна к выбросам.</p>` },
+  { nav: 'Сколько компонент', title: 'Сколько главных компонент оставить',
+    lt: 'Разброс вдоль главных осей', lh: '', rt: 'Облако в ℝ³', rh: 'перетащи, чтобы повернуть',
+    formula: () => `<span class="t">доля разброса</span> = (λ<sub>1</sub> + … + λ<sub>k</sub>) / (λ<sub>1</sub> + … + λ<sub>d</sub>)`,
+    html: () => `<p>Теперь признаков три, и точки лежат около плоскости. PCA находит три оси: <span class="c1">${M('w<sub>1</sub>')}</span> и <span class="c2">${M('w<sub>2</sub>')}</span> вдоль плоскости, <span class="c3">${M('w<sub>3</sub>')}</span> поперёк. Разброс вдоль осей — собственные значения ${M('λ')} (слева сверху).</p>
+      <p>При ${M('k = 2')} точки проецируются на плоскость первых двух осей, пунктир — остатки. Каждая точка описывается двумя числами вместо трёх, а теряется только разброс вдоль ${M('w<sub>3</sub>')}. При ${M('k = 1')} остатки большие, при ${M('k = 3')} сжатия нет. Нажми «Сбоку на плоскость», чтобы увидеть толщину облака, и увеличь её ползунком: ${M('λ<sub>3</sub>')} растёт, и плоскость описывает данные всё хуже.</p>
+      <p>Внизу слева то же для матрицы наклонов из многофакторной модели: 12 магазинов, 100 признаков. Два больших сингулярных числа и ровный «пол» шума значат, что индексов два. Плоскость наклонов проходит через ноль, поэтому там SVD без центрирования.</p>` },
+];
+function legend() {
+  const st = S.step;
+  if (st === 1) return '<span><i class="sw"></i>окружность и её образ</span><span><i class="sw ghost"></i>исходная окружность</span><span><i class="sw a1"></i>v₁ → σ₁u₁</span><span><i class="sw a2"></i>v₂ → σ₂u₂</span><span><i class="sw thin"></i>x → Ax</span>';
+  if (st === 2) {
+    if (S.ds === 'rat') return S.view === 'layer' ? '<span><i class="sw heat"></i>значение: минус ↔ плюс</span>' : '<span><i class="sw seq"></i>оценка: 0 ↔ 5</span>';
+    return S.ds === 'img' && S.view !== 'layer' ? '<span><i class="sw gray"></i>яркость: тёмное ↔ светлое</span>' : '<span><i class="sw heat"></i>значение: минус ↔ плюс</span>';
+  }
+  if (st === 3) return '<span><i class="sw a1"></i>разброс проекций</span><span><i class="sw es dash"></i>разброс остатков</span><span><i class="sw ghost"></i>их сумма</span><span><i class="dsw acc"></i>координаты на оси</span>';
+  if (st === 4) return '<span><i class="dsw"></i>школьники в новых координатах</span>' + (S.outlier ? '<span><i class="dsw acc"></i>выброс</span>' : '');
+  return '<span><i class="sw a1"></i>w₁</span><span><i class="sw a2"></i>w₂</span><span><i class="sw es"></i>w₃</span><span><i class="sw pl"></i>плоскость (k = 2)</span><span><i class="sw es dash"></i>остатки</span>';
+}
+const RT2 = { img: 'Картинка 64 × 64', rat: 'Оценки: 4 зрителя × 4 фильма', noise: 'Сигнал ранга 3 + шум, 48 × 48' };
+
+/* ---------- рендер ---------- */
+function renderNav() {
+  $('#steps').innerHTML = STEPS.map((x, i) => `<button type="button" data-step="${i + 1}" ${S.step === i + 1 ? 'aria-current="step"' : ''}><span class="n">${i + 1}</span>${x.nav}</button>`).join('');
+  $('#pos').textContent = `${S.step} / 5`;
+  $('#prev').disabled = S.step === 1; $('#next').disabled = S.step === 5;
+}
+function renderText() {
+  const x = STEPS[S.step - 1];
+  $('#text').innerHTML = `<h2>${x.title}</h2><div class="formula">${x.formula()}</div>${x.html()}`;
+}
+function renderHeads() {
+  const x = STEPS[S.step - 1], st = S.step;
+  $('#leftTitle').textContent = x.lt;
+  $('#leftHint').textContent = st === 4 ? (S.outlier ? 'нажми или перетащи, чтобы передвинуть выброс' : '') : x.lh;
+  $('#rightTitle').textContent = st === 2 ? RT2[S.ds] : st === 4 ? (S.center ? 'Новые координаты: z = (x − x̄)V' : 'Новые координаты без центрирования: z = xV') : x.rt;
+  $('#rightHint').textContent = st === 2 && S.view === 'layer' ? `σ${sub(kNow())} = ${fmt(D2[S.ds].sv.s[kNow() - 1], 2)}` : x.rh;
+  $('#legend').innerHTML = legend();
+}
+function renderControls() {
+  const st = S.step;
+  $('#g-mat').hidden = st !== 1; $('#g-stage').hidden = st !== 1;
+  $('#g-ds').hidden = st !== 2; $('#g-axis').hidden = st !== 3; $('#g-c4').hidden = st !== 4;
+  $('#g-cam').hidden = st !== 5; $('#g-k3').hidden = st !== 5;
+  ['a11', 'a12', 'a21', 'a22'].forEach((id, i) => { $('#' + id).value = S.A[i]; $('#' + id + '-o').textContent = fmt(S.A[i], 2); });
+  document.querySelectorAll('#stseg button').forEach(b => b.setAttribute('aria-pressed', String(Math.abs(S.stage - +b.dataset.t) < 1e-6)));
+  document.querySelectorAll('#dsseg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ds === S.ds)));
+  const D = D2[S.ds], r = D.sv.s.length;
+  $('#k2').max = r; $('#k2').value = kNow(); $('#k2-o').textContent = kNow();
+  document.querySelectorAll('#vseg button').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === S.view)); if (b.dataset.v === 'sig') b.hidden = S.ds !== 'noise'; });
+  $('#nz-c').hidden = S.ds !== 'noise'; $('#nz').value = S.nz; $('#nz-o').textContent = S.nz.toFixed(2);
+  $('#th').value = Math.round(S.th); $('#th-o').textContent = `${Math.round(S.th)}°`; $('#showax').checked = S.showAx;
+  $('#center').checked = S.center; $('#outl').checked = S.outlier;
+  document.querySelectorAll('#k3seg button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.k === S.k3)));
+  $('#thick').value = S.thick; $('#thick-o').textContent = S.thick.toFixed(2);
+}
+function renderLeft() {
+  const st = S.step, L = $('#left');
+  L.classList.toggle('drag', st === 1 || st === 3 || (st === 4 && S.outlier));
+  L.innerHTML = [left1, left2, left3, left4, left5][st - 1]();
+  $('#mats').hidden = st !== 1;
+  if (st === 1) $('#mats').innerHTML = mats1();
+}
+function renderRight() {
+  const st = S.step, R = $('#right');
+  R.classList.toggle('rot', st === 5);
+  R.innerHTML = [right1, right2, right3, right4, right5][st - 1]();
+  applyHL();
+}
+function renderReadout() {
+  const st = S.step, rows = [];
+  if (st === 1) {
+    const dd = dec(), x = [Math.cos(S.xa), Math.sin(S.xa)], ax = ap2(S.A, x), det = S.A[0] * S.A[3] - S.A[1] * S.A[2];
+    rows.push(['σ₁, наибольшее растяжение', dd.s1.toFixed(2)], ['σ₂, наименьшее растяжение', dd.s2.toFixed(2)], ['‖Ax‖ для текущего x', Math.hypot(ax[0], ax[1]).toFixed(2)]);
+    rows.push(['det A = ±σ₁σ₂', fmt(det, 2)], ['Ранг', dd.s1 < 1e-6 ? 0 : dd.s2 < 1e-6 ? 1 : 2], ['Число обусловленности σ₁/σ₂', dd.s2 > 1e-6 ? (dd.s1 / dd.s2).toFixed(2) : '∞']);
+  }
+  if (st === 2) {
+    const D = D2[S.ds], k = kNow(), sv = D.sv.s, n = D.A.length, d = D.A[0].length;
+    if (S.ds === 'rat') {
+      rows.push(['Сингулярные числа', sv.map(v => v < 0.005 ? '0' : v.toFixed(1)).join(' · ')], ['Ранг таблицы', sv.filter(v => v > 1e-6).length]);
+      rows.push(['Доля энергии в первых k', pct(energy(sv, k), 1)], [`Ошибка ‖R − R${sub(k)}‖`, fmt(Math.sqrt(sv.slice(k).reduce((p, x) => p + x * x, 0)), 2)]);
+    } else {
+      if (S.ds === 'img') rows.push(['Ранг картинки', rankOf(sv)]);
+      rows.push(['Слоёв k', k], ['Хранится чисел', `${int(k * (n + d + 1))} из ${int(n * d)}`], ['Доля энергии σ₁² + … + σₖ²', pct(energy(sv, k), 1)]);
+      rows.push([`Относительная ошибка ‖A − A${sub(k)}‖ / ‖A‖`, pct(Math.sqrt(Math.max(0, 1 - energy(sv, k))), 1)]);
+      if (S.ds === 'noise') {
+        const e = diffF(approx(D, k), SIG) / frob(SIG), e0 = diffF(D.A, SIG) / frob(SIG);
+        let best = 1, bv = Infinity; for (let j = 1; j <= 10; j++) { const v = diffF(approx(D, j), SIG); if (v < bv) { bv = v; best = j; } }
+        rows.push([`Ошибка относительно сигнала ‖S − A${sub(k)}‖ / ‖S‖`, `<span class="good">${pct(e, 1)}</span>`], ['То же для самой A (без обрезки)', pct(e0, 1)], ['Лучшее k по этой ошибке', best]);
+      }
+    }
+  }
+  if (st === 3) {
+    const s3 = stats3(), a = s3.va(S.th);
+    rows.push(['Угол оси θ', `${Math.round(S.th)}°`], ['Разброс проекций', a.toFixed(1)], ['Разброс остатков', (s3.tot - a).toFixed(1)], ['Сумма (не зависит от θ)', s3.tot.toFixed(1)]);
+    rows.push(['Максимум λ₁, при θ = ' + Math.round(s3.thStar) + '°', `<span class="good">${s3.l1.toFixed(1)}</span>`], ['Минимум λ₂', s3.l2.toFixed(1)], ['Доля λ₁ в общем разбросе', pct(s3.l1 / s3.tot)]);
+  }
+  if (st === 4) {
+    const s4 = stats4(), ang = Math.atan2(s4.v1[1], s4.v1[0]) * 180 / Math.PI;
+    rows.push(['Корреляция математики и физики', fmt(corr(s4.P), 2)], ['Корреляция новых координат z₁, z₂', `<span class="${S.center ? 'good' : ''}">${fmt(corr(s4.Z), 2)}</span>`]);
+    rows.push(['Угол первой оси', `${Math.round(ang)}°`], ['σ₁, σ₂', `${s4.s1.toFixed(1)} · ${s4.s2.toFixed(1)}`]);
+    if (S.center) rows.push(['λ₁, λ₂ = σ²/(n − 1)', `${s4.l1.toFixed(1)} · ${s4.l2.toFixed(1)}`], ['Доля разброса на первой оси', pct(s4.l1 / (s4.l1 + s4.l2))]);
+    else rows.push(['Доля энергии σ₁² / (σ₁² + σ₂²)', pct(s4.s1 ** 2 / (s4.s1 ** 2 + s4.s2 ** 2), 1)]);
+    rows.push(['Школьников', s4.n]);
+  }
+  if (st === 5) {
+    const { lam } = cloud5(), k = S.k3, tot = lam[0] + lam[1] + lam[2];
+    rows.push(['λ₁ · λ₂ · λ₃', lam.map(v => v.toFixed(2)).join(' · ')], [`Доля разброса в первых ${k}`, `<span class="good">${pct(lam.slice(0, k).reduce((p, v) => p + v, 0) / tot, 1)}</span>`]);
+    rows.push(['Разброс остатков', lam.slice(k).reduce((p, v) => p + v, 0).toFixed(2)], ['Чисел на точку', `${k} вместо 3`], ['Точек', N5]);
+  }
+  $('#readout').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
+}
+function applyHL() {
+  const on = S.hl !== null && (S.step === 3 || S.step === 4);
+  for (const box of [$('#left'), $('#right')]) {
+    box.classList.toggle('has-hl', on);
+    box.querySelectorAll('[data-i]').forEach(e => e.classList.toggle('hl', on && +e.dataset.i === S.hl));
+  }
+}
+function renderFrame() { renderLeft(); renderRight(); }
+function render() { renderNav(); renderText(); renderHeads(); renderControls(); renderFrame(); renderReadout(); }
+function update() { renderHeads(); renderControls(); renderFrame(); renderReadout(); }
+
+/* ---------- анимации ---------- */
+let stRaf = 0;
+function animStage(to) {
+  cancelAnimationFrame(stRaf);
+  const from = S.stage, dur = Math.min(1600, 750 * Math.abs(to - from) + 1);
+  if (reduce) { S.stage = to; update(); return; }
+  const t0 = performance.now();
+  const tick = now => { const p = Math.min(1, (now - t0) / dur); S.stage = from + (to - from) * ease(p); renderFrame(); renderControls(); if (p < 1) stRaf = requestAnimationFrame(tick); else { S.stage = to; update(); } };
+  stRaf = requestAnimationFrame(tick);
+}
+function playStages(delay = 350) {
+  cancelAnimationFrame(stRaf);
+  if (reduce) { S.stage = 3; update(); return; }
+  const seg = 900, pause = 380, t0 = performance.now() + delay;
+  S.stage = 0; update();
+  const tick = now => {
+    const e = Math.max(0, now - t0), cyc = seg + pause, i = Math.floor(e / cyc), r = e - i * cyc;
+    S.stage = i >= 3 ? 3 : i + ease(Math.min(1, r / seg));
+    renderFrame(); renderControls();
+    if (i < 3) stRaf = requestAnimationFrame(tick); else update();
+  };
+  stRaf = requestAnimationFrame(tick);
+}
+let thRaf = 0;
+function animTh(to) {
+  cancelAnimationFrame(thRaf);
+  const from = S.th; let d = to - from; if (d > 90) d -= 180; if (d < -90) d += 180;
+  const set = v => { S.th = ((v % 180) + 180) % 180; update(); };
+  if (reduce) { set(from + d); return; }
+  const t0 = performance.now();
+  const tick = now => { const p = Math.min(1, (now - t0) / 800); set(from + d * ease(p)); if (p < 1) thRaf = requestAnimationFrame(tick); };
+  thRaf = requestAnimationFrame(tick);
+}
+function goStep(n) {
+  n = clamp(n, 1, 5); if (n === S.step) return;
+  cancelAnimationFrame(stRaf); cancelAnimationFrame(thRaf); cancelAnimationFrame(camRaf);
+  S.step = n; S.hl = null; render();
+  if (n === 1) playStages(500);
+}
+
+/* ---------- события ---------- */
+$('#steps').addEventListener('click', e => { const b = e.target.closest('[data-step]'); if (b) goStep(+b.dataset.step); });
+$('#prev').addEventListener('click', () => goStep(S.step - 1));
+$('#next').addEventListener('click', () => goStep(S.step + 1));
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea')) return;
+  if (e.key === 'ArrowRight') goStep(S.step + 1);
+  if (e.key === 'ArrowLeft') goStep(S.step - 1);
+});
+const svgPt = (svg, e) => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left) * 400 / r.width, (e.clientY - r.top) * 400 / r.height]; };
+let ldrag = false;
+function leftAt(e) {
+  const [x, y] = svgPt($('#left'), e);
+  if (S.step === 1) { S.xa = Math.atan2(200 - y, x - 200); renderFrame(); renderReadout(); }
+  if (S.step === 3) { cancelAnimationFrame(thRaf); let a = Math.atan2(200 - y, x - 200) * 180 / Math.PI; S.th = ((a % 180) + 180) % 180; renderControls(); renderFrame(); renderReadout(); }
+  if (S.step === 4 && S.outlier) { S.out = [clamp((x - 40) / 3.42, 0, 100), clamp((362 - y) / 3.42, 0, 100)]; renderFrame(); renderReadout(); }
+}
+const LS = $('#left');
+LS.addEventListener('pointerdown', e => { if (!LS.classList.contains('drag')) return; ldrag = true; LS.setPointerCapture(e.pointerId); leftAt(e); });
+LS.addEventListener('pointermove', e => { if (ldrag) leftAt(e); });
+const endL = () => { ldrag = false; };
+LS.addEventListener('pointerup', endL); LS.addEventListener('pointercancel', endL);
+LS.addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (b && S.step === 2) { S.kds[S.ds] = +b.dataset.k; update(); } });
+LS.addEventListener('pointerover', e => { if (S.step !== 2) return; LS.querySelectorAll('.sbar.hov').forEach(x => x.classList.remove('hov')); const b = e.target.closest('[data-k]'); if (b && b.nextElementSibling) b.nextElementSibling.classList.add('hov'); });
+for (const box of [LS, $('#right')]) {
+  box.addEventListener('pointerover', e => {
+    if (ldrag || rdrag || !(S.step === 3 || S.step === 4)) return;
+    const t = e.target.closest('[data-i]'), v = t ? +t.dataset.i : null;
+    if (v !== S.hl) { S.hl = v; applyHL(); }
+  });
+  box.addEventListener('pointerleave', () => { if (S.hl !== null) { S.hl = null; applyHL(); } });
+}
+const RS = $('#right'); let rdrag = null;
+RS.addEventListener('pointerdown', e => { if (!RS.classList.contains('rot')) return; rdrag = { x: e.clientX, y: e.clientY }; RS.setPointerCapture(e.pointerId); RS.classList.add('dragging'); cancelAnimationFrame(camRaf); });
+RS.addEventListener('pointermove', e => {
+  if (!rdrag) return;
+  const k = 360 / Math.max(260, RS.getBoundingClientRect().width) * 0.9;
+  S.yaw += (e.clientX - rdrag.x) * k; S.pitch = clamp(S.pitch + (e.clientY - rdrag.y) * k, -85, 85);
+  rdrag = { x: e.clientX, y: e.clientY }; renderRight();
+});
+const endR = () => { rdrag = null; RS.classList.remove('dragging'); };
+RS.addEventListener('pointerup', endR); RS.addEventListener('pointercancel', endR);
+
+// шаг 1
+['a11', 'a12', 'a21', 'a22'].forEach((id, i) => $('#' + id).addEventListener('input', e => { S.A[i] = +e.target.value; update(); }));
+$('#presets').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (!b) return; S.A = PRESETS[+b.dataset.p].slice(); update(); playStages(250); });
+$('#stseg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (b) animStage(+b.dataset.t); });
+$('#playst').addEventListener('click', () => playStages(250));
+// шаг 2
+let p2 = 0;
+const later = fn => { cancelAnimationFrame(p2); p2 = requestAnimationFrame(fn); };
+$('#dsseg').addEventListener('click', e => { const b = e.target.closest('[data-ds]'); if (!b) return; S.ds = b.dataset.ds; if (S.view === 'sig' && S.ds !== 'noise') S.view = 'approx'; renderText(); update(); });
+$('#k2').addEventListener('input', e => { S.kds[S.ds] = +e.target.value; $('#k2-o').textContent = e.target.value; later(update); });
+$('#vseg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { S.view = b.dataset.v; update(); } });
+$('#nz').addEventListener('input', e => { S.nz = +e.target.value; $('#nz-o').textContent = S.nz.toFixed(2); later(() => { buildNoise(); update(); }); });
+// шаг 3
+$('#th').addEventListener('input', e => { cancelAnimationFrame(thRaf); S.th = +e.target.value; update(); });
+$('#find').addEventListener('click', () => { S.showAx = true; animTh(stats3().thStar); });
+$('#showax').addEventListener('change', e => { S.showAx = e.target.checked; update(); });
+const reseed = () => { S.seed += 1; RAW = genStudents(S.seed); update(); };
+$('#reseed3').addEventListener('click', reseed);
+// шаг 4
+$('#center').addEventListener('change', e => { S.center = e.target.checked; update(); });
+$('#outl').addEventListener('change', e => { S.outlier = e.target.checked; update(); });
+$('#reseed4').addEventListener('click', reseed);
+// шаг 5
+$('#v-edge').addEventListener('click', () => animCam(camAlong(cloud5().w[1])));
+$('#v-face').addEventListener('click', () => animCam(camAlong(cloud5().w[2])));
+$('#v-reset').addEventListener('click', () => animCam({ yaw: 35, pitch: 22 }));
+$('#k3seg').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (b) { S.k3 = +b.dataset.k; update(); } });
+$('#thick').addEventListener('input', e => { S.thick = +e.target.value; $('#thick-o').textContent = S.thick.toFixed(2); later(update); });
+$('#reseed5').addEventListener('click', () => { S.seed5 += 1; z5 = normals(5005 + S.seed5 * 13, 3 * N5); update(); });
+
+// картинки на canvas берут цвета темы: перерисовать при её смене
+const reTheme = () => { if (S.step === 2) renderRight(); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', reTheme);
+new MutationObserver(reTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+render();
+})();
+</script>
+</body>
+</html>
