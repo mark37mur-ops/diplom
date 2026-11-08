@@ -10,6 +10,7 @@ $$Y_{it} = c_i + X_{it}^\top P^\top \ell_i + \gamma_i^\top f_t + \varepsilon_{it
 
 - `latentnye_faktory_sintetika.ipynb` — ноутбук с экспериментами, уже выполненный: все таблицы и графики сохранены внутри. Код алгоритма находится прямо в ноутбуке, отдельные файлы для запуска не нужны.
 - `panelfac.py` — те же функции отдельным модулем: генерация данных, оценка, метрики.
+- `realnye_dannye_orangejuice.ipynb` — проверка на реальных данных: недельные продажи апельсинового сока в 83 магазинах сети Dominick's (11 марок). Ноутбук уже выполнен; алгоритм в нём доработан для панели с пропусками.
 
 ## Эксперименты
 
@@ -25,3 +26,15 @@ $$Y_{it} = c_i + X_{it}^\top P^\top \ell_i + \gamma_i^\top f_t + \varepsilon_{it
 ## Как запустить
 
 Нужны Python 3, `numpy`, `pandas`, `matplotlib` и Jupyter. Весь ноутбук пересчитывается примерно за 3–4 минуты.
+
+## Реальные данные
+
+Данные взяты из R-пакета [`bayesm`](https://CRAN.R-project.org/package=bayesm) (датасет `orangeJuice`, источник: A. L. Montgomery, *Marketing Science*, 1997; исходная база Dominick's — James M. Kilts Center for Marketing, University of Chicago Booth School of Business). Сами данные в репозиторий не выложены. Чтобы пересчитать ноутбук, выполните в R
+
+```r
+library(bayesm); data(orangeJuice)
+write.csv(orangeJuice$yx, "orangejuice_yx.csv", row.names = FALSE)
+```
+
+и положите `orangejuice_yx.csv` рядом с ноутбуком. Пересчёт занимает около 15 минут.
+
