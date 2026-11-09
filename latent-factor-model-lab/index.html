@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Панельная лаборатория</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: лабораторный стол — слева приборная панель с ползунками, справа результаты карточками */
+:root {
+  --bg: #F3F5F8;
+  --surface: #FFFFFF;
+  --surface-2: #EAEEF4;
+  --ink: #152030;
+  --muted: #5A6577;
+  --line: #D8DEE7;
+  --accent: #2346C8;
+  --accent-soft: #DCE3FA;
+  --ols: #C9701F;
+  --nof: #A3ACB8;
+  --nof2: #6D7888;
+  --oracle: #152030;
+  --heat-neg: #2F6F8F;
+  --heat-pos: #B4442F;
+  --warn: #9A5B00;
+  --font-display: "Unbounded", "Golos Text", system-ui, sans-serif;
+  --font-body: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E131A; --surface: #151C26; --surface-2: #1C2532; --ink: #E5EAF1; --muted: #98A4B4; --line: #283242;
+    --accent: #7D97FF; --accent-soft: #24305A; --ols: #EE9F55; --nof: #5E6878; --nof2: #8B96A6; --oracle: #E5EAF1;
+    --heat-neg: #4FA3C9; --heat-pos: #E07A62; --warn: #E3A64B; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E131A; --surface: #151C26; --surface-2: #1C2532; --ink: #E5EAF1; --muted: #98A4B4; --line: #283242;
+  --accent: #7D97FF; --accent-soft: #24305A; --ols: #EE9F55; --nof: #5E6878; --nof2: #8B96A6; --oracle: #E5EAF1;
+  --heat-neg: #4FA3C9; --heat-pos: #E07A62; --warn: #E3A64B; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1260px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 48px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(24px, 3.4vw, 36px); letter-spacing: -0.01em; line-height: 1.15; }
+h2 { font-size: 17px; font-weight: 600; }
+h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+p { margin: 0; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+header.top { display: grid; gap: 14px; margin-bottom: 22px; max-width: 900px; }
+.formula { font-family: var(--font-mono); font-size: 15px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; white-space: nowrap; }
+.formula .ix { color: var(--accent); font-weight: 500; }
+.formula .fc { color: var(--ols); font-weight: 500; }
+.lead { color: var(--muted); max-width: 70ch; }
+.legend-terms { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 14px; }
+.legend-terms b { color: var(--ink); font-weight: 600; }
+
+.layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 920px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 18px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 920px) { .panel { position: static; } }
+.group { display: grid; gap: 12px; }
+.ctl { display: grid; gap: 4px; }
+.ctl-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ctl label { font-size: 14px; font-weight: 500; }
+.ctl .val { font-family: var(--font-mono); font-size: 14px; color: var(--accent); min-width: 3ch; text-align: right; }
+.ctl .hint { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+input[type="range"]:disabled { opacity: 0.45; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: inherit; cursor: pointer; }
+.chip { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 999px; padding: 5px 11px; font-size: 13px; }
+.chip:hover { border-color: var(--accent); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.btn { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; font-size: 14px; }
+.btn:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.status { font-size: 13px; color: var(--muted); min-height: 1.4em; }
+
+.results { display: grid; gap: 18px; min-width: 0; }
+.verdict { background: var(--accent-soft); border-radius: 14px; padding: 16px 18px; display: grid; gap: 6px; }
+.verdict .big { font-size: 18px; font-weight: 600; text-wrap: balance; }
+.verdict p { color: var(--ink); }
+.verdict .warn { color: var(--warn); font-weight: 500; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 1100px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 12px; min-width: 0; align-content: start; }
+.card .note { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+.card .note b { color: var(--ink); font-weight: 600; }
+svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+svg text { font-family: var(--font-body); fill: var(--muted); font-size: 12px; }
+svg .lbl { fill: var(--ink); font-size: 13px; }
+svg .num { font-family: var(--font-mono); fill: var(--ink); font-size: 12px; }
+svg .axis { stroke: var(--line); stroke-width: 1; }
+svg .grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 3; }
+.f-olsnf { fill: var(--nof); } .s-olsnf { stroke: var(--nof); }
+.f-lrnf { fill: var(--nof2); } .s-lrnf { stroke: var(--nof2); }
+.f-olsf { fill: var(--ols); } .s-olsf { stroke: var(--ols); }
+.f-ours { fill: var(--accent); } .s-ours { stroke: var(--accent); }
+.f-oracle { fill: var(--oracle); } .s-oracle { stroke: var(--oracle); }
+.keys { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.sw.olsnf { background: var(--nof); } .sw.lrnf { background: var(--nof2); } .sw.olsf { background: var(--ols); } .sw.ours { background: var(--accent); }
+.sw.oracle { background: transparent; border: 2px dashed var(--oracle); width: 14px; height: 0; border-radius: 0; }
+.heatwrap { display: grid; gap: 6px; }
+canvas.heat { width: 100%; height: 220px; image-rendering: pixelated; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); }
+.heat-axes { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; flex-wrap: wrap; }
+.seg button { border: 0; background: var(--surface); color: var(--ink); padding: 6px 11px; font-size: 13px; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.progress { height: 6px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
+.progress > div { height: 100%; width: 0; background: var(--accent); transition: width 0.15s; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13.5px; color: var(--muted); }
+.stats b { color: var(--ink); font-family: var(--font-mono); font-weight: 500; }
+footer { margin-top: 26px; font-size: 13px; color: var(--muted); max-width: 80ch; }
+@media (prefers-reduced-motion: reduce) { .progress > div { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Панельная лаборатория</h1>
+    <p class="lead">Здесь можно покрутить многоиндексную модель панельных данных с латентными факторами. Страница генерирует синтетическую панель по модели, оценивает её нашим алгоритмом и конкурентами и показывает, кто ближе к правде. Истинные наклоны в синтетике известны, поэтому ошибку можно посчитать честно.</p>
+    <div class="formula" aria-label="Формула модели">Y<sub>it</sub> = c<sub>i</sub> + X<sub>it</sub><sup>⊤</sup><span class="ix">P<sup>⊤</sup>ℓ<sub>i</sub></span> + <span class="fc">γ<sub>i</sub><sup>⊤</sup>f<sub>t</sub></span> + ε<sub>it</sub></div>
+    <div class="legend-terms">
+      <span><b>наклон</b> b<sub>i</sub> = P<sup>⊤</sup>ℓ<sub>i</sub>: как индивид реагирует на признаки</span>
+      <span><b>индексы</b> (строки P): общие «рецепты» реакции, их m</span>
+      <span><b>факторы</b> f<sub>t</sub>: ненаблюдаемые общие шоки, их r</span>
+      <span><b>оракул</b>: тот же метод, но истинные факторы ему подсказаны</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="panel" aria-label="Настройки">
+      <div class="group">
+        <h3>Сценарии</h3>
+        <div class="presets" id="presets"></div>
+      </div>
+      <div class="group" id="dataCtl">
+        <h3>Данные</h3>
+      </div>
+      <div class="group" id="algCtl">
+        <h3>Что знает алгоритм</h3>
+        <label class="check"><input type="checkbox" id="sync" checked> берёт m и r как в данных</label>
+      </div>
+      <div class="group">
+        <button class="btn ghost" id="reseed" type="button">Новые данные</button>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </div>
+    </aside>
+
+    <main class="results">
+      <section class="verdict" id="verdict" aria-live="polite">
+        <div class="big">Считаю…</div>
+      </section>
+
+      <div class="grid2">
+        <section class="card">
+          <h2>Ошибка наклонов</h2>
+          <svg class="chart" id="bars" role="img" aria-label="Ошибка наклонов по методам"></svg>
+          <p class="note">Ошибка = ‖B̂ − B‖ / ‖B‖, где B — матрица истинных наклонов всех индивидов. <b>0,1 значит, что наклоны в среднем ошибаются на 10%</b> своей величины. Прочерк — метод здесь невозможен: на индивида меньше наблюдений, чем параметров.</p>
+        </section>
+
+        <section class="card">
+          <h2>Наклоны и плоскость индексов</h2>
+          <svg class="chart" id="cloud" role="img" aria-label="Облако наклонов"></svg>
+          <div class="keys"><span class="key"><span class="sw olsf"></span>МНК с факторами</span><span class="key"><span class="sw ours"></span>наша модель</span></div>
+          <p class="note">Каждая точка — один индивид. По горизонтали — его наклон вдоль первого индекса, по вертикали — насколько наклон <b>торчит из подпространства индексов</b>. У истинных наклонов вертикаль равна нулю. МНК по каждому индивиду размазан шумом вверх, наша модель прижата к плоскости, потому что знает, что наклоны лежат в ней.</p>
+        </section>
+
+        <section class="card">
+          <div class="row">
+            <h2>Данные</h2>
+            <div class="seg" id="heatMode">
+              <button type="button" data-mode="Y" aria-pressed="true">отклик</button>
+              <button type="button" data-mode="FAC" aria-pressed="false">факторная часть</button>
+              <button type="button" data-mode="EPS" aria-pressed="false">шум</button>
+            </div>
+          </div>
+          <div class="heatwrap">
+            <canvas class="heat" id="heat" aria-label="Тепловая карта панели"></canvas>
+            <div class="heat-axes"><span>t = 1</span><span>время →</span><span id="heatT">t = T</span></div>
+          </div>
+          <p class="note">Строки — индивиды, столбцы — моменты времени, цвет — значение. Во вкладке «факторная часть» видны <b>вертикальные полосы</b>: общий шок бьёт по всем индивидам в один момент, но с разной силой. Именно эти полосы алгоритм вычищает проекцией.</p>
+        </section>
+
+        <section class="card">
+          <h2>Как сходится алгоритм</h2>
+          <svg class="chart" id="conv" role="img" aria-label="Ошибка наклонов по итерациям"></svg>
+          <div class="stats" id="convStats"></div>
+          <p class="note">Ошибка наклонов на каждой итерации. Точка 0 — старт: факторы по главным компонентам всей панели и МНК по каждому индивиду. Дальше чередуются два шага: наклоны с малым рангом при текущих факторах и факторы по остаткам. Пунктир — оракул. <b>Обычно хватает нескольких итераций</b>, чтобы до него дойти.</p>
+        </section>
+      </div>
+
+      <section class="card">
+        <div class="row">
+          <h2>Эксперимент: меняем один параметр</h2>
+          <div class="row" style="justify-content:flex-start">
+            <div class="seg" id="sweepParam">
+              <button type="button" data-p="T" aria-pressed="true">длина ряда T</button>
+              <button type="button" data-p="n" aria-pressed="false">число индивидов n</button>
+              <button type="button" data-p="conf" aria-pressed="false">связь с факторами</button>
+              <button type="button" data-p="d" aria-pressed="false">число признаков d</button>
+            </div>
+            <button class="btn" id="sweepRun" type="button">Запустить</button>
+          </div>
+        </div>
+        <div class="progress" aria-hidden="true"><div id="sweepBar"></div></div>
+        <svg class="chart" id="sweep" role="img" aria-label="Ошибка в зависимости от параметра"></svg>
+        <div class="keys" id="sweepKeys"></div>
+        <p class="note" id="sweepNote"></p>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    Данные синтетические: индексы — гладкие профили по признакам, факторы — процессы AR(1), признаки связаны с факторами через случайные нагрузки, шум гауссовский. Всё считается в браузере. Метод и теоремы описаны в дипломе «Оценивание одноиндексных и многоиндексных моделей панельных данных с латентными факторами», М. Муравский, матфак ВШЭ.
+  </footer>
+</div>
+
+<script>
+/*CORE-START*/
+// ---------- случайные числа ----------
+function makeRng(seed) {
+  let a = seed >>> 0;
+  const u = () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  let spare = null;
+  const n = () => {
+    if (spare !== null) { const s = spare; spare = null; return s; }
+    let x, y, s;
+    do { x = 2 * u() - 1; y = 2 * u() - 1; s = x * x + y * y; } while (s <= 0 || s >= 1);
+    const k = Math.sqrt(-2 * Math.log(s) / s);
+    spare = y * k; return x * k;
+  };
+  return { u, n };
+}
+
+// ---------- линейная алгебра (row-major Float64Array) ----------
+function cholSolve(A, b, k) {
+  const L = new Float64Array(k * k);
+  let tr = 0; for (let i = 0; i < k; i++) tr += A[i * k + i];
+  const ridge = 1e-12 * (tr / k + 1e-300);
+  for (let i = 0; i < k; i++) {
+    for (let j = 0; j <= i; j++) {
+      let s = A[i * k + j];
+      for (let p = 0; p < j; p++) s -= L[i * k + p] * L[j * k + p];
+      if (i === j) L[i * k + i] = Math.sqrt(s > ridge ? s : ridge);
+      else L[i * k + j] = s / L[j * k + j];
+    }
+  }
+  const y = new Float64Array(k);
+  for (let i = 0; i < k; i++) { let s = b[i]; for (let p = 0; p < i; p++) s -= L[i * k + p] * y[p]; y[i] = s / L[i * k + i]; }
+  const x = new Float64Array(k);
+  for (let i = k - 1; i >= 0; i--) { let s = y[i]; for (let p = i + 1; p < k; p++) s -= L[p * k + i] * x[p]; x[i] = s / L[i * k + i]; }
+  return x;
+}
+
+// собственные числа и векторы симметричной матрицы (метод Якоби); векторы по убыванию собственных чисел
+function symEig(Ain, k) {
+  const A = Float64Array.from(Ain);
+  const V = new Float64Array(k * k);
+  for (let i = 0; i < k; i++) V[i * k + i] = 1;
+  for (let sweep = 0; sweep < 60; sweep++) {
+    let off = 0;
+    for (let p = 0; p < k; p++) for (let q = p + 1; q < k; q++) off += A[p * k + q] * A[p * k + q];
+    if (off < 1e-22) break;
+    for (let p = 0; p < k; p++) for (let q = p + 1; q < k; q++) {
+      const apq = A[p * k + q];
+      if (Math.abs(apq) < 1e-300) continue;
+      const theta = (A[q * k + q] - A[p * k + p]) / (2 * apq);
+      const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+      const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let r = 0; r < k; r++) {
+        const arp = A[r * k + p], arq = A[r * k + q];
+        A[r * k + p] = c * arp - s * arq; A[r * k + q] = s * arp + c * arq;
+      }
+      for (let r = 0; r < k; r++) {
+        const apr = A[p * k + r], aqr = A[q * k + r];
+        A[p * k + r] = c * apr - s * aqr; A[q * k + r] = s * apr + c * aqr;
+      }
+      for (let r = 0; r < k; r++) {
+        const vrp = V[r * k + p], vrq = V[r * k + q];
+        V[r * k + p] = c * vrp - s * vrq; V[r * k + q] = s * vrp + c * vrq;
+      }
+    }
+  }
+  const idx = [...Array(k).keys()].sort((a, b) => A[b * k + b] - A[a * k + a]);
+  return { vals: idx.map(i => A[i * k + i]), vecs: idx.map(i => { const v = new Float64Array(k); for (let r = 0; r < k; r++) v[r] = V[r * k + i]; return v; }) };
+}
+
+// ортонормировка столбцов матрицы T x q, хранящейся по столбцам (col c: M[c*T + t])
+function orthCols(M, T, q) {
+  for (let pass = 0; pass < 2; pass++) {
+    for (let c = 0; c < q; c++) {
+      for (let p = 0; p < c; p++) {
+        let s = 0; for (let t = 0; t < T; t++) s += M[c * T + t] * M[p * T + t];
+        for (let t = 0; t < T; t++) M[c * T + t] -= s * M[p * T + t];
+      }
+      let nr = 0; for (let t = 0; t < T; t++) nr += M[c * T + t] * M[c * T + t];
+      nr = Math.sqrt(nr) || 1;
+      for (let t = 0; t < T; t++) M[c * T + t] /= nr;
+    }
+  }
+  return M;
+}
+
+// первые r правых сингулярных векторов матрицы W (rows x T): ортогональные итерации
+function topRight(W, rows, T, r, Vinit, rng) {
+  let V = new Float64Array(T * r);
+  if (Vinit) V.set(Vinit); else for (let i = 0; i < T * r; i++) V[i] = rng.n();
+  orthCols(V, T, r);
+  const U = new Float64Array(rows * r);
+  for (let it = 0; it < 400; it++) {
+    U.fill(0);
+    for (let i = 0; i < rows; i++) {
+      const o = i * T;
+      for (let c = 0; c < r; c++) { let s = 0; const vo = c * T; for (let t = 0; t < T; t++) s += W[o + t] * V[vo + t]; U[i * r + c] = s; }
+    }
+    const Vn = new Float64Array(T * r);
+    for (let i = 0; i < rows; i++) {
+      const o = i * T;
+      for (let c = 0; c < r; c++) { const u = U[i * r + c]; if (u === 0) continue; const vo = c * T; for (let t = 0; t < T; t++) Vn[vo + t] += W[o + t] * u; }
+    }
+    orthCols(Vn, T, r);
+    let s = 0;
+    for (let a = 0; a < r; a++) for (let b = 0; b < r; b++) { let d = 0; for (let t = 0; t < T; t++) d += V[a * T + t] * Vn[b * T + t]; s += d * d; }
+    V = Vn;
+    if (r - s < 1e-11) break;
+  }
+  return V;
+}
+
+// ---------- модель ----------
+function makeData(p, seed) {
+  const { n, T, d, m, r, conf, sigma } = p;
+  const rng = makeRng(seed * 7919 + 13);
+  const P = new Float64Array(m * d);
+  for (let k = 0; k < m; k++) {
+    let nr = 0;
+    for (let j = 0; j < d; j++) { const v = Math.sin(Math.PI * (k + 1) * (j + 1) / (d + 1)); P[k * d + j] = v; nr += v * v; }
+    nr = Math.sqrt(nr); for (let j = 0; j < d; j++) P[k * d + j] /= nr;
+  }
+  const meanL = [1.5, 0.5, 0];
+  const L = new Float64Array(n * m);
+  for (let i = 0; i < n; i++) for (let k = 0; k < m; k++) L[i * m + k] = 0.7 * rng.n() + meanL[k];
+  const B = new Float64Array(n * d);
+  for (let i = 0; i < n; i++) for (let j = 0; j < d; j++) { let s = 0; for (let k = 0; k < m; k++) s += L[i * m + k] * P[k * d + j]; B[i * d + j] = s; }
+  const F = new Float64Array(T * r); // строки t
+  const f = new Float64Array(r); const rho = 0.6, sc = Math.sqrt(1 - rho * rho);
+  for (let t = 0; t < T + 50; t++) {
+    for (let k = 0; k < r; k++) f[k] = rho * f[k] + sc * rng.n();
+    if (t >= 50) for (let k = 0; k < r; k++) F[(t - 50) * r + k] = f[k];
+  }
+  const G = new Float64Array(n * r);
+  for (let i = 0; i < n; i++) for (let k = 0; k < r; k++) G[i * r + k] = rng.n() + (k === 0 ? 1 : 0);
+  const c = new Float64Array(n);
+  for (let i = 0; i < n; i++) c[i] = rng.n();
+  const X = new Float64Array(n * T * d);
+  const Y = new Float64Array(n * T), FAC = new Float64Array(n * T), EPS = new Float64Array(n * T);
+  const Phi = new Float64Array(d * r);
+  for (let i = 0; i < n; i++) {
+    for (let q = 0; q < d * r; q++) Phi[q] = conf * rng.n();
+    for (let t = 0; t < T; t++) {
+      const o = (i * T + t) * d;
+      for (let j = 0; j < d; j++) {
+        let s = rng.n();
+        for (let k = 0; k < r; k++) s += Phi[j * r + k] * F[t * r + k];
+        X[o + j] = s;
+      }
+      let xb = 0; for (let j = 0; j < d; j++) xb += X[o + j] * B[i * d + j];
+      let fac = 0; for (let k = 0; k < r; k++) fac += G[i * r + k] * F[t * r + k];
+      const e = sigma * rng.n();
+      FAC[i * T + t] = fac; EPS[i * T + t] = e;
+      Y[i * T + t] = c[i] + xb + fac + e;
+    }
+  }
+  return { p, n, T, d, m, r, P, L, B, F, G, c, X, Y, FAC, EPS };
+}
+
+function precompute(D) {
+  const { n, T, d, X, Y } = D;
+  const XtX = new Float64Array(n * d * d), XtY = new Float64Array(n * d), YtY = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const g = i * d * d;
+    for (let t = 0; t < T; t++) {
+      const o = (i * T + t) * d, y = Y[i * T + t];
+      YtY[i] += y * y;
+      for (let a = 0; a < d; a++) {
+        const xa = X[o + a]; XtY[i * d + a] += xa * y;
+        for (let b = a; b < d; b++) XtX[g + a * d + b] += xa * X[o + b];
+      }
+    }
+    for (let a = 0; a < d; a++) for (let b = 0; b < a; b++) XtX[g + a * d + b] = XtX[g + b * d + a];
+  }
+  D.XtX = XtX; D.XtY = XtY; D.YtY = YtY;
+}
+
+// ортонормированный базис span(1, F); F хранится по строкам t (T x r)
+function basis(F, T, r) {
+  const q = r + 1, H = new Float64Array(q * T);
+  for (let t = 0; t < T; t++) H[t] = 1;
+  for (let k = 0; k < r; k++) for (let t = 0; t < T; t++) H[(k + 1) * T + t] = F[t * r + k];
+  orthCols(H, T, q);
+  return { H, q };
+}
+
+function projStats(D, Hb) {
+  const { n, T, d, X, Y, XtX, XtY } = D, { H, q } = Hb;
+  const G = Float64Array.from(XtX), Z = Float64Array.from(XtY);
+  const HX = new Float64Array(n * q * d), HY = new Float64Array(n * q);
+  for (let i = 0; i < n; i++) {
+    for (let c = 0; c < q; c++) {
+      const ho = c * T, xo = (i * q + c) * d;
+      let hy = 0;
+      for (let t = 0; t < T; t++) {
+        const h = H[ho + t]; if (h === 0) continue;
+        const o = (i * T + t) * d;
+        hy += h * Y[i * T + t];
+        for (let a = 0; a < d; a++) HX[xo + a] += h * X[o + a];
+      }
+      HY[i * q + c] = hy;
+    }
+    const g = i * d * d;
+    for (let c = 0; c < q; c++) {
+      const xo = (i * q + c) * d, hy = HY[i * q + c];
+      for (let a = 0; a < d; a++) {
+        const ha = HX[xo + a];
+        Z[i * d + a] -= ha * hy;
+        for (let b = 0; b < d; b++) G[g + a * d + b] -= ha * HX[xo + b];
+      }
+    }
+  }
+  return { G, Z, HX, HY, q };
+}
+
+function ssr(D, st, Bm) {
+  const { n, d, XtX, XtY, YtY } = D, { HX, HY, q } = st;
+  let S = 0;
+  for (let i = 0; i < n; i++) {
+    const g = i * d * d, b = i * d;
+    let v = YtY[i];
+    for (let a = 0; a < d; a++) { v -= 2 * Bm[b + a] * XtY[b + a]; let s = 0; for (let c = 0; c < d; c++) s += XtX[g + a * d + c] * Bm[b + c]; v += Bm[b + a] * s; }
+    for (let c = 0; c < q; c++) { let s = HY[i * q + c]; const xo = (i * q + c) * d; for (let a = 0; a < d; a++) s -= HX[xo + a] * Bm[b + a]; v -= s * s; }
+    S += v;
+  }
+  return S;
+}
+
+function olsSlopes(D, st) {
+  const { n, d } = D, Bm = new Float64Array(n * d);
+  for (let i = 0; i < n; i++) Bm.set(cholSolve(st.G.subarray(i * d * d, (i + 1) * d * d), st.Z.subarray(i * d, (i + 1) * d), d), i * d);
+  return Bm;
+}
+
+function principalAxes(Bm, n, d, m) {
+  const Q = new Float64Array(d * d);
+  for (let i = 0; i < n; i++) for (let a = 0; a < d; a++) { const ba = Bm[i * d + a]; if (ba === 0) continue; for (let b = 0; b < d; b++) Q[a * d + b] += ba * Bm[i * d + b]; }
+  const { vecs } = symEig(Q, d);
+  const P = new Float64Array(m * d);
+  for (let k = 0; k < m; k++) P.set(vecs[k], k * d);
+  return P;
+}
+
+function lowrankSlopes(D, st, P0, m, iters, tol) {
+  const { n, d } = D, { G, Z } = st;
+  let Bk = Float64Array.from(P0);
+  const Lm = new Float64Array(n * m), Bm = new Float64Array(n * d);
+  let prev = Infinity;
+  const BG = new Float64Array(m * d), M = new Float64Array(m * m), rhs = new Float64Array(m);
+  for (let it = 0; it < iters; it++) {
+    for (let i = 0; i < n; i++) {
+      const g = i * d * d;
+      BG.fill(0);
+      for (let k = 0; k < m; k++) for (let a = 0; a < d; a++) { const bka = Bk[k * d + a]; if (bka === 0) continue; for (let b = 0; b < d; b++) BG[k * d + b] += bka * G[g + a * d + b]; }
+      for (let k = 0; k < m; k++) {
+        let s = 0; for (let a = 0; a < d; a++) s += Bk[k * d + a] * Z[i * d + a]; rhs[k] = s;
+        for (let l = 0; l < m; l++) { let v = 0; for (let b = 0; b < d; b++) v += BG[k * d + b] * Bk[l * d + b]; M[k * m + l] = v; }
+      }
+      Lm.set(cholSolve(M, rhs, m), i * m);
+    }
+    const md = m * d, A = new Float64Array(md * md), R = new Float64Array(md);
+    for (let i = 0; i < n; i++) {
+      const g = i * d * d;
+      for (let k = 0; k < m; k++) {
+        const lk = Lm[i * m + k];
+        for (let a = 0; a < d; a++) R[k * d + a] += lk * Z[i * d + a];
+        for (let l = 0; l < m; l++) {
+          const w = lk * Lm[i * m + l];
+          for (let a = 0; a < d; a++) { const row = (k * d + a) * md + l * d; for (let b = 0; b < d; b++) A[row + b] += w * G[g + a * d + b]; }
+        }
+      }
+    }
+    Bk = cholSolve(A, R, md);
+    let obj = 0;
+    for (let i = 0; i < n; i++) {
+      const g = i * d * d;
+      for (let a = 0; a < d; a++) { let s = 0; for (let k = 0; k < m; k++) s += Lm[i * m + k] * Bk[k * d + a]; Bm[i * d + a] = s; }
+      for (let a = 0; a < d; a++) { let s = 0; for (let b = 0; b < d; b++) s += G[g + a * d + b] * Bm[i * d + b]; obj += Bm[i * d + a] * (s - 2 * Z[i * d + a]); }
+    }
+    if (prev - obj < tol * (Math.abs(obj) + 1)) break;
+    prev = obj;
+  }
+  return { P: principalAxes(Bm, n, d, m), B: Bm };
+}
+
+function factorStep(D, Bm, r, Vprev, rng) {
+  const { n, T, d, X, Y } = D;
+  const W = new Float64Array(n * T);
+  for (let i = 0; i < n; i++) {
+    let mean = 0;
+    for (let t = 0; t < T; t++) { const o = (i * T + t) * d; let s = Y[i * T + t]; for (let a = 0; a < d; a++) s -= X[o + a] * Bm[i * d + a]; W[i * T + t] = s; mean += s; }
+    mean /= T; for (let t = 0; t < T; t++) W[i * T + t] -= mean;
+  }
+  const V = topRight(W, n, T, r, Vprev, rng);
+  const F = new Float64Array(T * r), s = Math.sqrt(T);
+  for (let t = 0; t < T; t++) for (let k = 0; k < r; k++) F[t * r + k] = s * V[k * T + t];
+  return { F, V };
+}
+
+function initFactors(D, r, rng) {
+  const { n, T, d, X, Y } = D, rows = n * (d + 1);
+  const S = new Float64Array(rows * T);
+  let row = 0;
+  const put = (get) => {
+    let mu = 0; for (let t = 0; t < T; t++) { const v = get(t); S[row * T + t] = v; mu += v; }
+    mu /= T; let ss = 0;
+    for (let t = 0; t < T; t++) { S[row * T + t] -= mu; ss += S[row * T + t] ** 2; }
+    const sd = Math.sqrt(ss / T) + 1e-12; for (let t = 0; t < T; t++) S[row * T + t] /= sd;
+    row++;
+  };
+  for (let i = 0; i < n; i++) {
+    put(t => Y[i * T + t]);
+    for (let a = 0; a < d; a++) put(t => X[(i * T + t) * d + a]);
+  }
+  const V = topRight(S, rows, T, r, null, rng);
+  const F = new Float64Array(T * r), s = Math.sqrt(T);
+  for (let t = 0; t < T; t++) for (let k = 0; k < r; k++) F[t * r + k] = s * V[k * T + t];
+  return { F, V };
+}
+
+function randomP(d, m, rng) {
+  const M = new Float64Array(m * d);
+  for (let i = 0; i < m * d; i++) M[i] = rng.n();
+  orthCols(M, d, m);
+  return M;
+}
+
+// ---------- метрики ----------
+function relErr(Bh, B) {
+  let a = 0, b = 0;
+  for (let i = 0; i < B.length; i++) { a += (Bh[i] - B[i]) ** 2; b += B[i] ** 2; }
+  return Math.sqrt(a / b);
+}
+// насколько подпространство span(Q) (q столбцов) не покрыто span(Qh): синус наибольшего угла
+function coverAngle(Q, q, Qh, qh, T) {
+  const M = new Float64Array(q * qh);
+  for (let a = 0; a < q; a++) for (let b = 0; b < qh; b++) { let s = 0; for (let t = 0; t < T; t++) s += Q[a * T + t] * Qh[b * T + t]; M[a * qh + b] = s; }
+  const MM = new Float64Array(q * q);
+  for (let a = 0; a < q; a++) for (let c = 0; c < q; c++) { let s = 0; for (let b = 0; b < qh; b++) s += M[a * qh + b] * M[c * qh + b]; MM[a * q + c] = s; }
+  const { vals } = symEig(MM, q);
+  const mn = Math.min(...vals);
+  return Math.sqrt(Math.max(0, Math.min(1, 1 - mn)));
+}
+function indexAngle(Ph, mh, P, m, d) {
+  // P хранится по строкам (m x d) — как столбцы длины d
+  return coverAngle(P, m, Ph, mh, d);
+}
+
+// ---------- методы ----------
+function fitOurs(D, m, r, opts = {}) {
+  const { T, d } = D, rng = makeRng(opts.seed || 1);
+  const maxIt = opts.maxIt || 300, tol = opts.tol || 1e-8;
+  const trueB = basis(D.F, T, D.r);
+  const angles = [], hist = [];
+  let F = null, V = null;
+  if (r > 0) ({ F, V } = initFactors(D, r, rng));
+  let Hb = basis(F || new Float64Array(0), T, r);
+  let st = projStats(D, Hb);
+  let P = T > d + r + 1 ? principalAxes(olsSlopes(D, st), D.n, d, m) : randomP(d, m, rng);
+  let res;
+  if (r > 0) angles.push(coverAngle(trueB.H, trueB.q, Hb.H, Hb.q, T));
+  const errs = [T > d + r + 1 ? relErr(olsSlopes(D, st), D.B) : null];
+  for (let it = 0; it < maxIt; it++) {
+    if (it > 0) { Hb = basis(F, T, r); st = projStats(D, Hb); }
+    res = lowrankSlopes(D, st, P, m, r > 0 ? 5 : 400, r > 0 ? 1e-10 : 1e-12);
+    P = res.P;
+    hist.push(ssr(D, st, res.B));
+    errs.push(relErr(res.B, D.B));
+    if (r === 0) break;
+    if (it > 0 && hist[it - 1] - hist[it] < tol * hist[it]) break;
+    ({ F, V } = factorStep(D, res.B, r, V, rng));
+    angles.push(coverAngle(trueB.H, trueB.q, basis(F, T, r).H, r + 1, T));
+  }
+  return { P, B: res.B, F, r, hist, angles, errs, iters: hist.length, Hb };
+}
+
+function runAll(D, malg, ralg, seed) {
+  const { T, d, n } = D;
+  precompute(D);
+  const t0 = performance.now();
+  const ours = fitOurs(D, malg, ralg, { seed });
+  const tOurs = performance.now() - t0;
+  const out = { ours: relErr(ours.B, D.B) };
+  const cen = projStats(D, basis(new Float64Array(0), T, 0));
+  const canOLS0 = T > d + 1, canOLSr = T > d + ralg + 1;
+  let olsnfB = null, olsfB = null;
+  if (canOLS0) { olsnfB = olsSlopes(D, cen); out.olsnf = relErr(olsnfB, D.B); } else out.olsnf = null;
+  const rng = makeRng(seed + 5);
+  const P0 = canOLS0 ? principalAxes(olsnfB, n, d, malg) : randomP(d, malg, rng);
+  out.lrnf = relErr(lowrankSlopes(D, cen, P0, malg, 400, 1e-12).B, D.B);
+  if (canOLSr) { olsfB = olsSlopes(D, ralg > 0 ? projStats(D, ours.Hb) : cen); out.olsf = relErr(olsfB, D.B); } else out.olsf = null;
+  const stT = projStats(D, basis(D.F, T, D.r));
+  const Po = T > d + D.r + 1 ? principalAxes(olsSlopes(D, stT), n, d, D.m) : randomP(d, D.m, rng);
+  out.oracle = relErr(lowrankSlopes(D, stT, Po, D.m, 500, 1e-12).B, D.B);
+  return { err: out, ours, olsfB, olsnfB, tOurs, idxAngle: indexAngle(ours.P, malg, D.P, D.m, d) };
+}
+/*CORE-END*/
+
+// ---------- интерфейс ----------
+const METHODS = [
+  { id: 'olsnf', name: 'МНК без факторов', short: 'МНК без ф.' },
+  { id: 'lrnf', name: 'Малый ранг без факторов', short: 'Малый ранг без ф.' },
+  { id: 'olsf', name: 'МНК с факторами', short: 'МНК с ф.' },
+  { id: 'ours', name: 'Наша модель', short: 'Наша модель' },
+  { id: 'oracle', name: 'Оракул', short: 'Оракул' },
+];
+const CTL = {
+  n: { label: 'n — индивидов', hint: 'магазинов, зданий, стран', min: 20, max: 300, step: 10, v: 100 },
+  T: { label: 'T — моментов времени', hint: 'длина ряда у каждого индивида', min: 10, max: 400, step: 5, v: 200 },
+  d: { label: 'd — признаков', hint: 'цены, погода и т. п.', min: 2, max: 30, step: 1, v: 20 },
+  m: { label: 'm — индексов', hint: 'сколько общих «рецептов» реакции', min: 1, max: 3, step: 1, v: 2 },
+  r: { label: 'r — латентных факторов', hint: 'сколько скрытых общих шоков', min: 0, max: 4, step: 1, v: 2 },
+  conf: { label: 'Связь признаков с факторами', hint: '0 — факторы безвредны; чем больше, тем сильнее смещение без их учёта', min: 0, max: 2, step: 0.05, v: 0.5 },
+  sigma: { label: 'Шум σ', hint: 'собственный шум индивида', min: 0.2, max: 3, step: 0.1, v: 1 },
+};
+const ALG = {
+  malg: { label: 'Индексов берёт алгоритм', min: 1, max: 3, step: 1, v: 2 },
+  ralg: { label: 'Факторов берёт алгоритм', min: 0, max: 6, step: 1, v: 2 },
+};
+const PRESETS = [
+  { name: 'Базовый', set: { n: 100, T: 200, d: 20, m: 2, r: 2, conf: 0.5, sigma: 1 } },
+  { name: 'Короткие ряды', set: { n: 100, T: 30, d: 20, m: 2, r: 2, conf: 0.5, sigma: 1 } },
+  { name: 'Признаков больше, чем наблюдений', set: { n: 150, T: 18, d: 20, m: 2, r: 2, conf: 0.5, sigma: 1 } },
+  { name: 'Сильные факторы', set: { n: 100, T: 200, d: 20, m: 2, r: 2, conf: 1.5, sigma: 1 } },
+  { name: 'Факторы безвредны', set: { n: 100, T: 200, d: 20, m: 2, r: 2, conf: 0, sigma: 1 } },
+  { name: 'Мало индивидов', set: { n: 20, T: 100, d: 10, m: 2, r: 2, conf: 0.5, sigma: 1 } },
+  { name: 'Недооценили факторы', set: { n: 100, T: 200, d: 20, m: 2, r: 2, conf: 0.5, sigma: 1 }, alg: { malg: 2, ralg: 1 } },
+];
+
+const state = { seed: 1, heat: 'Y', last: null, busy: false, sweepP: 'T' };
+const $ = (id) => document.getElementById(id);
+const fmt = (x, k = 3) => x == null || !isFinite(x) ? '—' : x.toFixed(k).replace('.', ',');
+
+function addSlider(parent, key, spec) {
+  const w = document.createElement('div'); w.className = 'ctl';
+  w.innerHTML = `<div class="ctl-head"><label for="c-${key}">${spec.label}</label><span class="val" id="v-${key}"></span></div>
+    <input type="range" id="c-${key}" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${spec.v}">
+    ${spec.hint ? `<div class="hint">${spec.hint}</div>` : ''}`;
+  parent.appendChild(w);
+  const inp = w.querySelector('input');
+  inp.addEventListener('input', () => { showVal(key); onChange(key); });
+}
+function getv(key) { return parseFloat($('c-' + key).value); }
+function setv(key, v) { $('c-' + key).value = v; showVal(key); }
+function showVal(key) { const v = getv(key); $('v-' + key).textContent = key === 'conf' || key === 'sigma' ? fmt(v, 2) : String(v); }
+
+function params() {
+  const p = {}; for (const k of Object.keys(CTL)) p[k] = getv(k);
+  p.m = Math.min(p.m, p.d - 1);
+  return p;
+}
+function algParams(p) {
+  if ($('sync').checked) return { malg: p.m, ralg: p.r };
+  return { malg: Math.min(getv('malg'), p.d - 1), ralg: getv('ralg') };
+}
+function syncAlg() {
+  const on = $('sync').checked;
+  $('c-malg').disabled = on; $('c-ralg').disabled = on;
+  if (on) { const p = params(); setv('malg', p.m); setv('ralg', p.r); }
+}
+
+let timer = null;
+function onChange(key) {
+  document.querySelectorAll('#presets .chip').forEach(b => b.setAttribute('aria-pressed', 'false'));
+  if (key === 'd' && getv('m') > getv('d') - 1) setv('m', Math.max(1, getv('d') - 1));
+  if ($('sync').checked) syncAlg();
+  clearTimeout(timer); timer = setTimeout(run, 280);
+}
+
+function run() {
+  if (state.busy) { clearTimeout(timer); timer = setTimeout(run, 300); return; }
+  const p = params(), a = algParams(p);
+  const big = p.n * p.T * p.d > 1.2e6;
+  $('status').textContent = big ? 'Считаю… большие данные, это займёт пару секунд' : 'Считаю…';
+  setTimeout(() => {
+    const t0 = performance.now();
+    const D = makeData(p, state.seed);
+    const R = runAll(D, a.malg, a.ralg, state.seed);
+    state.last = { D, R, p, a };
+    render();
+    $('status').textContent = `Готово за ${fmt((performance.now() - t0) / 1000, 1)} с · данные №${state.seed}`;
+  }, 20);
+}
+
+// ---------- рисование ----------
+function cw(id, fallback = 560) { const w = $(id).clientWidth; return Math.max(300, Math.round(w || fallback)); }
+function svgEl(id, w, h, body) { const s = $(id); s.setAttribute('viewBox', `0 0 ${w} ${h}`); s.innerHTML = body; }
+function niceScale(x, k = 4) {
+  if (!(x > 0)) x = 1;
+  const raw = x / k, e = Math.pow(10, Math.floor(Math.log10(raw)));
+  let step = 10 * e; for (const f of [1, 2, 2.5, 5, 10]) if (f * e >= raw) { step = f * e; break; }
+  const mx = Math.ceil(x / step - 1e-9) * step, ts = [];
+  for (let v = 0; v <= mx + step * 1e-6; v += step) ts.push(v);
+  const dec = step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step) - 1e-9) + (String(+(step / e).toFixed(1)).includes('.') ? 1 : 0));
+  return { mx, ts, dec };
+}
+function niceMax(x) { if (!(x > 0)) return 1; const e = Math.pow(10, Math.floor(Math.log10(x))); for (const k of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (k * e >= x) return k * e; return 10 * e; }
+function ticks(mx, k = 4) { const out = []; for (let i = 0; i <= k; i++) out.push(mx * i / k); return out; }
+
+function renderBars() {
+  const e = state.last.R.err;
+  const W = cw('bars'), rowH = 36, top = 6, left = W < 460 ? 122 : 176, right = 58, H = top + rowH * METHODS.length + 20;
+  const sc = niceScale(Math.max(...METHODS.map(m => e[m.id] || 0)) * 1.02, W < 460 ? 2 : 4), mx = sc.mx;
+  const sx = (v) => left + (W - left - right) * v / mx;
+  const narrow = W < 460;
+  let b = '';
+  for (const t of sc.ts) b += `<line class="grid" x1="${sx(t)}" x2="${sx(t)}" y1="${top}" y2="${H - 20}"/><text x="${sx(t)}" y="${H - 5}" text-anchor="middle">${fmt(t, sc.dec)}</text>`;
+  METHODS.forEach((m, k) => {
+    const y = top + k * rowH, v = e[m.id];
+    b += `<text class="lbl" x="${left - 10}" y="${y + rowH / 2 + 4}" text-anchor="end"${m.id === 'ours' ? ' font-weight="600"' : ''}>${narrow ? m.short : m.name}</text>`;
+    if (v == null) { b += `<text class="num" x="${left + 6}" y="${y + rowH / 2 + 4}">— невозможно</text>`; return; }
+    if (m.id === 'oracle') b += `<rect x="${left}" y="${y + 9}" width="${Math.max(1, sx(v) - left)}" height="${rowH - 18}" fill="none" class="s-oracle" stroke-width="2" stroke-dasharray="4 3" rx="3"/>`;
+    else b += `<rect class="f-${m.id}" x="${left}" y="${y + 9}" width="${Math.max(1, sx(v) - left)}" height="${rowH - 18}" rx="3"/>`;
+    b += `<text class="num" x="${sx(v) + 6}" y="${y + rowH / 2 + 4}">${fmt(v)}</text>`;
+  });
+  b += `<line class="axis" x1="${left}" x2="${left}" y1="${top}" y2="${H - 20}"/>`;
+  svgEl('bars', W, H, b);
+}
+
+function renderCloud() {
+  const { D, R } = state.last, { n, d, m, P } = D;
+  const sets = [];
+  if (R.olsfB) sets.push({ B: R.olsfB, cls: 'olsf' }); else if (R.olsnfB) sets.push({ B: R.olsnfB, cls: 'olsf' });
+  sets.push({ B: R.ours.B, cls: 'ours' });
+  const proj = (B) => {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const b = B.subarray(i * d, (i + 1) * d);
+      const coef = []; for (let k = 0; k < m; k++) { let s = 0; for (let j = 0; j < d; j++) s += P[k * d + j] * b[j]; coef.push(s); }
+      let out = 0; for (let j = 0; j < d; j++) { let v = b[j]; for (let k = 0; k < m; k++) v -= coef[k] * P[k * d + j]; out += v * v; }
+      pts.push([coef[0], Math.sqrt(out)]);
+    }
+    return pts;
+  };
+  const all = sets.map(s => ({ ...s, pts: proj(s.B) }));
+  const xs = all.flatMap(s => s.pts.map(p => p[0])), ys = all.flatMap(s => s.pts.map(p => p[1]));
+  const trueX = []; for (let i = 0; i < n; i++) { let s = 0; for (let j = 0; j < d; j++) s += P[j] * D.B[i * d + j]; trueX.push(s); }
+  let x0 = Math.min(...xs, ...trueX), x1 = Math.max(...xs, ...trueX); const pad = (x1 - x0) * 0.06 || 1; x0 -= pad; x1 += pad;
+  const scy = niceScale(Math.max(...ys) * 1.02), ymx = scy.mx;
+  const W = cw('cloud'), H = Math.round(Math.min(300, Math.max(240, W * 0.55))), L = 46, Rr = 12, T0 = 10, B0 = 36;
+  const sx = (v) => L + (W - L - Rr) * (v - x0) / (x1 - x0), sy = (v) => H - B0 - (H - B0 - T0) * v / ymx;
+  let b = '';
+  for (const t of scy.ts) b += `<line class="grid" x1="${L}" x2="${W - Rr}" y1="${sy(t)}" y2="${sy(t)}"/><text x="${L - 6}" y="${sy(t) + 4}" text-anchor="end">${fmt(t, scy.dec)}</text>`;
+  const scx = niceScale(Math.max(Math.abs(x0), Math.abs(x1)), W < 460 ? 2 : 4);
+  for (let t = -scx.mx; t <= scx.mx + 1e-9; t += scx.ts[1] || 1) if (t >= x0 && t <= x1) b += `<text x="${sx(t)}" y="${H - B0 + 16}" text-anchor="middle">${fmt(Math.abs(t) < 1e-9 ? 0 : t, scx.dec)}</text>`;
+  b += `<line class="axis" x1="${L}" x2="${W - Rr}" y1="${sy(0)}" y2="${sy(0)}"/>`;
+  for (const s of all) for (const [x, y] of s.pts) b += `<circle class="f-${s.cls}" cx="${sx(x).toFixed(1)}" cy="${sy(y).toFixed(1)}" r="3.2" fill-opacity="${s.cls === 'ours' ? 0.85 : 0.55}"/>`;
+  for (const x of trueX) b += `<line class="s-oracle" x1="${sx(x).toFixed(1)}" x2="${sx(x).toFixed(1)}" y1="${sy(0) - 4}" y2="${sy(0) + 4}" stroke-width="1"/>`;
+  b += `<text x="${(L + W - Rr) / 2}" y="${H - 4}" text-anchor="middle">${W < 460 ? 'вдоль первого индекса (штрихи — истина)' : 'наклон вдоль первого индекса (штрихи — истинные значения)'}</text>`;
+  b += `<text x="12" y="${(T0 + H - B0) / 2}" text-anchor="middle" transform="rotate(-90 12 ${(T0 + H - B0) / 2})">выход из плоскости</text>`;
+  svgEl('cloud', W, H, b);
+}
+
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function hexToRgb(h) {
+  const c = document.createElement('canvas').getContext('2d'); c.fillStyle = h; const s = c.fillStyle;
+  if (s.startsWith('#')) return [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
+  const m = s.match(/\d+/g); return m ? m.slice(0, 3).map(Number) : [128, 128, 128];
+}
+function renderHeat() {
+  const { D } = state.last, { n, T } = D, M = D[state.heat];
+  const cv = $('heat'); cv.width = T; cv.height = n;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(T, n);
+  const neg = hexToRgb(cssVar('--heat-neg')), pos = hexToRgb(cssVar('--heat-pos')), mid = hexToRgb(cssVar('--surface'));
+  const vals = Array.from(M).map(Math.abs).sort((a, b) => a - b);
+  const sc = vals[Math.floor(vals.length * 0.98)] || 1;
+  for (let i = 0; i < n; i++) {
+    let mu = 0; if (state.heat === 'Y') { for (let t = 0; t < T; t++) mu += M[i * T + t]; mu /= T; }
+    for (let t = 0; t < T; t++) {
+      let v = (M[i * T + t] - mu) / sc; v = Math.max(-1, Math.min(1, v));
+      const tgt = v < 0 ? neg : pos, a = Math.abs(v), o = (i * T + t) * 4;
+      for (let c = 0; c < 3; c++) img.data[o + c] = Math.round(mid[c] + (tgt[c] - mid[c]) * a);
+      img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  $('heatT').textContent = `t = ${T}`;
+}
+
+function lineChart(id, xs, series, opts) {
+  const W = cw(id), H = opts.h || 260, L = 50, Rr = 14, T0 = 10, B0 = 38;
+  const allY = series.flatMap(s => s.flat != null ? [s.flat] : s.ys.filter(v => v != null && isFinite(v)));
+  const rawMax = opts.ymax || Math.max(...allY, 0.01);
+  const scl = niceScale(Math.min(rawMax, opts.cap || Infinity) * 1.02), ymx = scl.mx;
+  const clipped = rawMax > ymx;
+  const nx = xs.length, sx = (k) => L + (W - L - Rr) * (nx === 1 ? 0.5 : k / (nx - 1)), sy = (v) => H - B0 - (H - B0 - T0) * Math.min(v, ymx) / ymx;
+  let b = '';
+  for (const t of scl.ts) b += `<line class="grid" x1="${L}" x2="${W - Rr}" y1="${sy(t)}" y2="${sy(t)}"/><text x="${L - 6}" y="${sy(t) + 4}" text-anchor="end">${fmt(t, scl.dec)}</text>`;
+  const step = Math.ceil(nx / Math.max(3, Math.floor(W / 70)));
+  xs.forEach((x, k) => { if (k % step === 0 || k === nx - 1) b += `<text x="${sx(k)}" y="${H - B0 + 16}" text-anchor="middle">${x}</text>`; });
+  b += `<line class="axis" x1="${L}" x2="${W - Rr}" y1="${sy(0)}" y2="${sy(0)}"/>`;
+  for (const s of series) {
+    if (s.flat != null) { b += `<line class="s-${s.cls}" x1="${L}" x2="${W - Rr}" y1="${sy(s.flat)}" y2="${sy(s.flat)}" stroke-width="2" stroke-dasharray="5 4"/>`; continue; }
+    let path = '', pen = false;
+    s.ys.forEach((v, k) => { if (v == null || !isFinite(v)) { pen = false; return; } path += `${pen ? 'L' : 'M'}${sx(k).toFixed(1)},${sy(v).toFixed(1)} `; pen = true; });
+    if (path) b += `<path class="s-${s.cls}" d="${path}" fill="none" stroke-width="${s.cls === 'ours' ? 2.6 : 2}"${s.dash ? ' stroke-dasharray="5 4"' : ''} stroke-linejoin="round"/>`;
+    s.ys.forEach((v, k) => { if (v == null || !isFinite(v)) return; if (v > ymx) b += `<path class="f-${s.cls}" d="M${(sx(k) - 5).toFixed(1)},${(sy(ymx) + 4).toFixed(1)} L${(sx(k) + 5).toFixed(1)},${(sy(ymx) + 4).toFixed(1)} L${sx(k).toFixed(1)},${(sy(ymx) - 5).toFixed(1)} Z"/>`; else b += `<circle class="f-${s.cls}" cx="${sx(k).toFixed(1)}" cy="${sy(v).toFixed(1)}" r="${s.cls === 'ours' ? 3.6 : 3}"/>`; });
+  }
+  if (opts.xlabel) b += `<text x="${(L + W - Rr) / 2}" y="${H - 4}" text-anchor="middle">${opts.xlabel}</text>`;
+  if (clipped) b += `<text x="${W - Rr}" y="${T0 + 2}" text-anchor="end">▲ — значение выше шкалы</text>`;
+  svgEl(id, W, H, b);
+}
+
+function renderConv() {
+  const { R } = state.last, o = R.ours;
+  const xs = o.errs.map((_, k) => k);
+  lineChart('conv', xs, [{ cls: 'ours', ys: o.errs }, { cls: 'oracle', flat: R.err.oracle }], { xlabel: 'итерация', h: 240 });
+  const ang = o.angles.length ? o.angles[o.angles.length - 1] : null;
+  $('convStats').innerHTML = `<span>итераций: <b>${o.iters}</b></span><span>время: <b>${fmt(R.tOurs / 1000, 2)} с</b></span>` +
+    (ang != null ? `<span>угол между найденными и истинными факторами: <b>${fmt(ang, 2)}</b></span>` : '<span>факторы не оцениваются (r = 0)</span>');
+}
+
+function renderVerdict() {
+  const { R, p, a } = state.last, e = R.err;
+  const lines = [];
+  let big;
+  if (e.olsf != null) {
+    const k = e.olsf / e.ours;
+    big = k >= 1.05 ? `Наша модель ошибается в ${fmt(k, 1)} раза меньше, чем МНК по каждому индивиду с факторами.` : (k > 0.95 ? 'Наша модель и МНК по каждому индивиду с факторами здесь примерно равны.' : `Здесь МНК по каждому индивиду точнее нашей модели в ${fmt(1 / k, 1)} раза.`);
+  } else big = `МНК по каждому индивиду здесь невозможен: наблюдений на индивида (T = ${p.T}) не больше, чем параметров (d + r + 1 = ${p.d + a.ralg + 1}). Наша модель работает: ошибка ${fmt(e.ours)}.`;
+  const gap = (e.ours - e.oracle) / e.oracle;
+  if (a.ralg < p.r) lines.push(`<span class="warn">Алгоритм берёт ${a.ralg} из ${p.r} факторов. Неучтённые факторы остаются в ошибке, и наклоны смещены: до оракула ${fmt(e.ours / e.oracle, 1)} раза.</span>`);
+  else if (a.malg < p.m) lines.push(`<span class="warn">Алгоритм берёт ${a.malg} из ${p.m} индексов: часть реакции на признаки он отбрасывает, отсюда смещение.</span>`);
+  else lines.push(gap < 0.08 ? `До оракула, которому подсказаны факторы, не хватает всего ${fmt(Math.max(0, gap) * 100, 0)}%: незнание факторов почти ничего не стоит.` : `До оракула, которому подсказаны факторы, не хватает ${fmt(gap * 100, 0)}%.`);
+  if (p.r > 0 && p.conf > 0.15) lines.push(`Без учёта факторов ошибка ${fmt(Math.min(e.olsnf ?? Infinity, e.lrnf))}: это смещение из-за связи признаков с факторами, и с ростом данных оно не уходит.`);
+  if (p.r > 0 && p.conf <= 0.15) lines.push('Признаки почти не связаны с факторами, поэтому смещения нет, но учёт факторов всё равно уменьшает шум.');
+  $('verdict').innerHTML = `<div class="big">${big}</div>` + lines.map(l => `<p>${l}</p>`).join('');
+}
+
+function render() { renderVerdict(); renderBars(); renderCloud(); renderHeat(); renderConv(); }
+
+// ---------- эксперимент ----------
+const SWEEP = {
+  T: { label: 'длина ряда T', vals: (p) => [15, 25, 40, 60, 100, 150, 250, 400], note: 'На коротких рядах МНК по каждому индивиду очень шумный или вообще невозможен, а малый ранг работает. С ростом T МНК догоняет, но наша модель остаётся у оракула. Методы без факторов не улучшаются: их ошибка — смещение.' },
+  n: { label: 'число индивидов n', vals: () => [20, 40, 80, 150, 300], note: 'Чем больше индивидов, тем точнее оцениваются общие индексы и факторы, и наша модель подходит к оракулу. МНК по каждому индивиду от n не зависит: каждый индивид оценивается сам по себе.' },
+  conf: { label: 'связь признаков с факторами', vals: () => [0, 0.25, 0.5, 0.75, 1, 1.5, 2], note: 'Без связи с факторами все методы несмещённые. Чем сильнее связь, тем больше смещение у методов без факторов. Наша модель от силы связи почти не зависит.' },
+  d: { label: 'число признаков d', vals: () => [4, 8, 12, 16, 20, 25, 30], note: 'МНК по каждому индивиду оценивает d чисел на индивида, и его ошибка растёт с d. Малый ранг оценивает m чисел на индивида плюс общие индексы, поэтому растёт гораздо медленнее.' },
+};
+function drawSweep() { const r = state.sweepRes; lineChart('sweep', r.xs, r.series, { xlabel: r.label + ' (остальное как на панели слева, по 3 набора данных на точку)', h: 320, cap: 1 }); }
+function renderSweepKeys() {
+  $('sweepKeys').innerHTML = METHODS.map(m => `<span class="key"><span class="sw ${m.id}"></span>${m.name}</span>`).join('');
+}
+async function runSweep() {
+  if (state.busy) return;
+  state.busy = true; $('sweepRun').disabled = true;
+  const key = state.sweepP, spec = SWEEP[key], base = params(), a0 = algParams(base);
+  let vals = spec.vals(base);
+  const reps = 3, total = vals.length * reps;
+  const res = Object.fromEntries(METHODS.map(m => [m.id, vals.map(() => [])]));
+  $('sweepNote').textContent = spec.note;
+  let done = 0;
+  for (let k = 0; k < vals.length; k++) {
+    for (let s = 1; s <= reps; s++) {
+      const p = { ...base, [key]: vals[k] };
+      p.m = Math.min(p.m, p.d - 1);
+      const a = { malg: Math.min(a0.malg, p.d - 1), ralg: a0.ralg };
+      const D = makeData(p, 100 + s);
+      const R = runAll(D, a.malg, a.ralg, s);
+      for (const m of METHODS) res[m.id][k].push(R.err[m.id]);
+      done++; $('sweepBar').style.width = `${100 * done / total}%`;
+      const mean = (arr) => arr.length && arr.every(v => v != null) ? arr.reduce((x, y) => x + y, 0) / arr.length : null;
+      state.sweepRes = { xs: vals.map(v => key === 'conf' ? fmt(v, 2) : v), series: METHODS.map(m => ({ cls: m.id, ys: res[m.id].map((arr, j) => j <= k ? mean(arr) : null), dash: m.id === 'oracle' })), label: spec.label };
+      drawSweep();
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
+  state.busy = false; $('sweepRun').disabled = false;
+}
+
+// ---------- запуск ----------
+function init() {
+  for (const [k, s] of Object.entries(CTL)) addSlider($('dataCtl'), k, s);
+  for (const [k, s] of Object.entries(ALG)) addSlider($('algCtl'), k, s);
+  Object.keys(CTL).concat(Object.keys(ALG)).forEach(showVal);
+  $('sync').addEventListener('change', () => { syncAlg(); onChange('sync'); });
+  syncAlg();
+  PRESETS.forEach((pr, k) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = pr.name; b.setAttribute('aria-pressed', k === 0 ? 'true' : 'false');
+    b.addEventListener('click', () => {
+      for (const [kk, v] of Object.entries(pr.set)) setv(kk, v);
+      $('sync').checked = !pr.alg; syncAlg();
+      if (pr.alg) for (const [kk, v] of Object.entries(pr.alg)) setv(kk, v);
+      clearTimeout(timer); run();
+      document.querySelectorAll('#presets .chip').forEach(x => x.setAttribute('aria-pressed', 'false'));
+      b.setAttribute('aria-pressed', 'true');
+    });
+    $('presets').appendChild(b);
+  });
+  $('reseed').addEventListener('click', () => { state.seed++; run(); });
+  document.querySelectorAll('#heatMode button').forEach(b => b.addEventListener('click', () => {
+    state.heat = b.dataset.mode; document.querySelectorAll('#heatMode button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    if (state.last) renderHeat();
+  }));
+  document.querySelectorAll('#sweepParam button').forEach(b => b.addEventListener('click', () => {
+    state.sweepP = b.dataset.p; document.querySelectorAll('#sweepParam button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    $('sweepNote').textContent = SWEEP[state.sweepP].note;
+  }));
+  $('sweepRun').addEventListener('click', runSweep);
+  renderSweepKeys();
+  $('sweepNote').textContent = SWEEP.T.note + ' Нажмите «Запустить», чтобы построить кривые.';
+  lineChart('sweep', SWEEP.T.vals().map(String), [], { xlabel: 'длина ряда T', h: 300, ymax: 1 });
+  let rz = null; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (state.last) { renderBars(); renderCloud(); renderConv(); } if (state.sweepRes) drawSweep(); }, 150); });
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => state.last && renderHeat()); } catch (e) {}
+  new MutationObserver(() => state.last && renderHeat()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  run();
+}
+init();
+</script>
+
+</body>
+</html>
