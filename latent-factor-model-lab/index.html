@@ -135,13 +135,13 @@ footer { margin-top: 26px; font-size: 13px; color: var(--muted); max-width: 80ch
 <div class="wrap">
   <header class="top">
     <h1>Панельная лаборатория</h1>
-    <p class="lead">Здесь можно покрутить многоиндексную модель панельных данных с латентными факторами. Страница генерирует синтетическую панель по модели, оценивает её нашим алгоритмом и конкурентами и показывает, кто ближе к правде. Истинные наклоны в синтетике известны, поэтому ошибку можно посчитать честно.</p>
+    <p class="lead">Интерактивная синтетика к главам 4–6 черновика Draft — End of November. Сравните оценки с истинными наклонами и проследите, как меняется профильный критерий.</p>
     <div class="formula" aria-label="Формула модели">Y<sub>it</sub> = c<sub>i</sub> + X<sub>it</sub><sup>⊤</sup><span class="ix">P<sup>⊤</sup>ℓ<sub>i</sub></span> + <span class="fc">γ<sub>i</sub><sup>⊤</sup>f<sub>t</sub></span> + ε<sub>it</sub></div>
     <div class="legend-terms">
       <span><b>наклон</b> b<sub>i</sub> = P<sup>⊤</sup>ℓ<sub>i</sub>: как индивид реагирует на признаки</span>
-      <span><b>индексы</b> (строки P): общие «рецепты» реакции, их m</span>
+      <span><b>индексы</b> (строки P): общие направления наклонов, их m</span>
       <span><b>факторы</b> f<sub>t</sub>: ненаблюдаемые общие шоки, их r</span>
-      <span><b>оракул</b>: тот же метод, но истинные факторы ему подсказаны</span>
+      <span><b>оракул</b>: оценка при известных истинных факторах</span>
     </div>
   </header>
 
@@ -155,7 +155,7 @@ footer { margin-top: 26px; font-size: 13px; color: var(--muted); max-width: 80ch
         <h3>Данные</h3>
       </div>
       <div class="group" id="algCtl">
-        <h3>Что знает алгоритм</h3>
+        <h3>Сколько индексов и факторов оцениваем</h3>
         <label class="check"><input type="checkbox" id="sync" checked> берёт m и r как в данных</label>
       </div>
       <div class="group">
@@ -173,14 +173,14 @@ footer { margin-top: 26px; font-size: 13px; color: var(--muted); max-width: 80ch
         <section class="card">
           <h2>Ошибка наклонов</h2>
           <svg class="chart" id="bars" role="img" aria-label="Ошибка наклонов по методам"></svg>
-          <p class="note">Ошибка = ‖B̂ − B‖ / ‖B‖, где B — матрица истинных наклонов всех индивидов. <b>0,1 значит, что наклоны в среднем ошибаются на 10%</b> своей величины. Прочерк — метод здесь невозможен: на индивида меньше наблюдений, чем параметров.</p>
+          <p class="note">Относительная ошибка ‖B̂ − B‖<sub>F</sub> / ‖B‖<sub>F</sub> по всем наклонам. Значение 0,1 означает, что норма Фробениуса ошибки составляет 10% от нормы истинной матрицы.</p>
         </section>
 
         <section class="card">
-          <h2>Наклоны и плоскость индексов</h2>
+          <h2>Наклоны и подпространство индексов</h2>
           <svg class="chart" id="cloud" role="img" aria-label="Облако наклонов"></svg>
-          <div class="keys"><span class="key"><span class="sw olsf"></span>МНК с факторами</span><span class="key"><span class="sw ours"></span>наша модель</span></div>
-          <p class="note">Каждая точка — один индивид. По горизонтали — его наклон вдоль первого индекса, по вертикали — насколько наклон <b>торчит из подпространства индексов</b>. У истинных наклонов вертикаль равна нулю. МНК по каждому индивиду размазан шумом вверх, наша модель прижата к плоскости, потому что знает, что наклоны лежат в ней.</p>
+          <div class="keys"><span class="key" id="cloudBaseline"><span class="sw olsf"></span><span id="cloudBaselineLabel"></span></span><span class="key"><span class="sw ours"></span>наша модель</span></div>
+          <p class="note">Каждая точка — один индивид. По горизонтали — координата вдоль первого истинного индекса, по вертикали — расстояние до истинного подпространства индексов. Предложенный алгоритм ограничивает наклоны оценённым подпространством.</p>
         </section>
 
         <section class="card">
@@ -196,14 +196,18 @@ footer { margin-top: 26px; font-size: 13px; color: var(--muted); max-width: 80ch
             <canvas class="heat" id="heat" aria-label="Тепловая карта панели"></canvas>
             <div class="heat-axes"><span>t = 1</span><span>время →</span><span id="heatT">t = T</span></div>
           </div>
-          <p class="note">Строки — индивиды, столбцы — моменты времени, цвет — значение. Во вкладке «факторная часть» видны <b>вертикальные полосы</b>: общий шок бьёт по всем индивидам в один момент, но с разной силой. Именно эти полосы алгоритм вычищает проекцией.</p>
+          <p class="note">Строки — индивиды, столбцы — моменты времени, цвет — значение. Во вкладке «факторная часть» видны <b>вертикальные полосы</b>: общий шок бьёт по всем индивидам в один момент, но с разной силой. На шаге по наклонам отклик и признаки проецируются на дополнение к пространству постоянного ряда и текущих факторов.</p>
         </section>
 
         <section class="card">
-          <h2>Как сходится алгоритм</h2>
+          <h2>Что меняется по итерациям</h2>
+          <div class="seg" id="iterationMode">
+            <button type="button" data-mode="criterion" aria-pressed="true">профильный критерий</button>
+            <button type="button" data-mode="error" aria-pressed="false">ошибка наклонов</button>
+          </div>
           <svg class="chart" id="conv" role="img" aria-label="Ошибка наклонов по итерациям"></svg>
           <div class="stats" id="convStats"></div>
-          <p class="note">Ошибка наклонов на каждой итерации. Точка 0 — старт: факторы по главным компонентам всей панели и МНК по каждому индивиду. Дальше чередуются два шага: наклоны с малым рангом при текущих факторах и факторы по остаткам. Пунктир — оракул. <b>Обычно хватает нескольких итераций</b>, чтобы до него дойти.</p>
+          <p class="note">При текущих факторах проекция исключает индивидуальные уровни и нагрузки на факторы. Затем факторы обновляются по главным компонентам центрированных остатков. При точном выполнении шагов профильный критерий не возрастает. Ошибка наклонов может увеличиваться. В режиме ошибки пунктир показывает многоиндексную оценку при известных факторах.</p>
         </section>
       </div>
 
@@ -229,7 +233,7 @@ footer { margin-top: 26px; font-size: 13px; color: var(--muted); max-width: 80ch
   </div>
 
   <footer>
-    Данные синтетические: индексы — гладкие профили по признакам, факторы — процессы AR(1), признаки связаны с факторами через случайные нагрузки, шум гауссовский. Всё считается в браузере. Метод и теоремы описаны в дипломе «Оценивание одноиндексных и многоиндексных моделей панельных данных с латентными факторами», М. Муравский, матфак ВШЭ.
+    Данные синтетические: индексы — гладкие профили по признакам, факторы — процессы AR(1), признаки связаны с факторами через случайные нагрузки, шум гауссовский. Всё считается в браузере. Базовый сценарий использует параметры главы 6. Генератор браузера даёт собственные реализации.
   </footer>
 </div>
 
@@ -582,37 +586,29 @@ function coverAngle(Q, q, Qh, qh, T) {
   const mn = Math.min(...vals);
   return Math.sqrt(Math.max(0, Math.min(1, 1 - mn)));
 }
-function indexAngle(Ph, mh, P, m, d) {
-  // P хранится по строкам (m x d) — как столбцы длины d
-  return coverAngle(P, m, Ph, mh, d);
-}
-
 // ---------- методы ----------
 function fitOurs(D, m, r, opts = {}) {
   const { T, d } = D, rng = makeRng(opts.seed || 1);
   const maxIt = opts.maxIt || 300, tol = opts.tol || 1e-8;
-  const trueB = basis(D.F, T, D.r);
-  const angles = [], hist = [];
+  const hist = [];
   let F = null, V = null;
   if (r > 0) ({ F, V } = initFactors(D, r, rng));
   let Hb = basis(F || new Float64Array(0), T, r);
   let st = projStats(D, Hb);
-  let P = T > d + r + 1 ? principalAxes(olsSlopes(D, st), D.n, d, m) : randomP(d, m, rng);
+  let P = T >= d + r + 1 ? principalAxes(olsSlopes(D, st), D.n, d, m) : randomP(d, m, rng);
   let res;
-  if (r > 0) angles.push(coverAngle(trueB.H, trueB.q, Hb.H, Hb.q, T));
-  const errs = [T > d + r + 1 ? relErr(olsSlopes(D, st), D.B) : null];
+  const errs = [T >= d + r + 1 ? relErr(olsSlopes(D, st), D.B) : null];
   for (let it = 0; it < maxIt; it++) {
     if (it > 0) { Hb = basis(F, T, r); st = projStats(D, Hb); }
     res = lowrankSlopes(D, st, P, m, r > 0 ? 5 : 400, r > 0 ? 1e-10 : 1e-12);
     P = res.P;
     hist.push(ssr(D, st, res.B));
     errs.push(relErr(res.B, D.B));
-    if (r === 0) break;
+    if (r === 0 || it === maxIt - 1) break;
     if (it > 0 && hist[it - 1] - hist[it] < tol * hist[it]) break;
     ({ F, V } = factorStep(D, res.B, r, V, rng));
-    angles.push(coverAngle(trueB.H, trueB.q, basis(F, T, r).H, r + 1, T));
   }
-  return { P, B: res.B, F, r, hist, angles, errs, iters: hist.length, Hb };
+  return { P, B: res.B, F, r, hist, errs, iters: hist.length, Hb };
 }
 
 function runAll(D, malg, ralg, seed) {
@@ -623,17 +619,18 @@ function runAll(D, malg, ralg, seed) {
   const tOurs = performance.now() - t0;
   const out = { ours: relErr(ours.B, D.B) };
   const cen = projStats(D, basis(new Float64Array(0), T, 0));
-  const canOLS0 = T > d + 1, canOLSr = T > d + ralg + 1;
+  const canOLS0 = T >= d + 1, canOLSr = T >= d + D.r + 1;
   let olsnfB = null, olsfB = null;
   if (canOLS0) { olsnfB = olsSlopes(D, cen); out.olsnf = relErr(olsnfB, D.B); } else out.olsnf = null;
   const rng = makeRng(seed + 5);
   const P0 = canOLS0 ? principalAxes(olsnfB, n, d, malg) : randomP(d, malg, rng);
   out.lrnf = relErr(lowrankSlopes(D, cen, P0, malg, 400, 1e-12).B, D.B);
-  if (canOLSr) { olsfB = olsSlopes(D, ralg > 0 ? projStats(D, ours.Hb) : cen); out.olsf = relErr(olsfB, D.B); } else out.olsf = null;
-  const stT = projStats(D, basis(D.F, T, D.r));
-  const Po = T > d + D.r + 1 ? principalAxes(olsSlopes(D, stT), n, d, D.m) : randomP(d, D.m, rng);
+  const trueBasis = basis(D.F, T, D.r);
+  const stT = projStats(D, trueBasis);
+  if (canOLSr) { olsfB = olsSlopes(D, stT); out.olsf = relErr(olsfB, D.B); } else out.olsf = null;
+  const Po = T >= d + D.r + 1 ? principalAxes(olsSlopes(D, stT), n, d, D.m) : randomP(d, D.m, rng);
   out.oracle = relErr(lowrankSlopes(D, stT, Po, D.m, 500, 1e-12).B, D.B);
-  return { err: out, ours, olsfB, olsnfB, tOurs, idxAngle: indexAngle(ours.P, malg, D.P, D.m, d) };
+  return { err: out, ours, olsfB, olsnfB, tOurs, factorDistance: D.r === ralg ? coverAngle(trueBasis.H, trueBasis.q, ours.Hb.H, ours.Hb.q, T) : null };
 }
 /*CORE-END*/
 
@@ -641,9 +638,9 @@ function runAll(D, malg, ralg, seed) {
 const METHODS = [
   { id: 'olsnf', name: 'МНК без факторов', short: 'МНК без ф.' },
   { id: 'lrnf', name: 'Малый ранг без факторов', short: 'Малый ранг без ф.' },
-  { id: 'olsf', name: 'МНК с факторами', short: 'МНК с ф.' },
+  { id: 'olsf', name: 'МНК с истинными факторами', short: 'МНК с ист. ф.' },
   { id: 'ours', name: 'Наша модель', short: 'Наша модель' },
-  { id: 'oracle', name: 'Оракул', short: 'Оракул' },
+  { id: 'oracle', name: 'Многоиндексный оракул', short: 'Многоинд. оракул' },
 ];
 const CTL = {
   n: { label: 'n — индивидов', hint: 'магазинов, зданий, стран', min: 20, max: 300, step: 10, v: 100 },
@@ -651,7 +648,7 @@ const CTL = {
   d: { label: 'd — признаков', hint: 'цены, погода и т. п.', min: 2, max: 30, step: 1, v: 20 },
   m: { label: 'm — индексов', hint: 'сколько общих «рецептов» реакции', min: 1, max: 3, step: 1, v: 2 },
   r: { label: 'r — латентных факторов', hint: 'сколько скрытых общих шоков', min: 0, max: 4, step: 1, v: 2 },
-  conf: { label: 'Связь признаков с факторами', hint: '0 — факторы безвредны; чем больше, тем сильнее смещение без их учёта', min: 0, max: 2, step: 0.05, v: 0.5 },
+  conf: { label: 'Связь признаков с факторами', hint: '0 — в признаках нет факторной компоненты', min: 0, max: 2, step: 0.05, v: 0.5 },
   sigma: { label: 'Шум σ', hint: 'собственный шум индивида', min: 0.2, max: 3, step: 0.1, v: 1 },
 };
 const ALG = {
@@ -662,13 +659,13 @@ const PRESETS = [
   { name: 'Базовый', set: { n: 100, T: 200, d: 20, m: 2, r: 2, conf: 0.5, sigma: 1 } },
   { name: 'Короткие ряды', set: { n: 100, T: 30, d: 20, m: 2, r: 2, conf: 0.5, sigma: 1 } },
   { name: 'Признаков больше, чем наблюдений', set: { n: 150, T: 18, d: 20, m: 2, r: 2, conf: 0.5, sigma: 1 } },
-  { name: 'Сильные факторы', set: { n: 100, T: 200, d: 20, m: 2, r: 2, conf: 1.5, sigma: 1 } },
-  { name: 'Факторы безвредны', set: { n: 100, T: 200, d: 20, m: 2, r: 2, conf: 0, sigma: 1 } },
+  { name: 'Сильная связь с факторами', set: { n: 100, T: 200, d: 20, m: 2, r: 2, conf: 1.5, sigma: 1 } },
+  { name: 'Факторы не входят в признаки', set: { n: 100, T: 200, d: 20, m: 2, r: 2, conf: 0, sigma: 1 } },
   { name: 'Мало индивидов', set: { n: 20, T: 100, d: 10, m: 2, r: 2, conf: 0.5, sigma: 1 } },
   { name: 'Недооценили факторы', set: { n: 100, T: 200, d: 20, m: 2, r: 2, conf: 0.5, sigma: 1 }, alg: { malg: 2, ralg: 1 } },
 ];
 
-const state = { seed: 1, heat: 'Y', last: null, busy: false, sweepP: 'T' };
+const state = { seed: 1, heat: 'Y', iteration: 'criterion', last: null, busy: false, sweepP: 'T' };
 const $ = (id) => document.getElementById(id);
 const fmt = (x, k = 3) => x == null || !isFinite(x) ? '—' : x.toFixed(k).replace('.', ',');
 
@@ -761,6 +758,8 @@ function renderBars() {
 function renderCloud() {
   const { D, R } = state.last, { n, d, m, P } = D;
   const sets = [];
+  $('cloudBaseline').style.display = R.olsfB || R.olsnfB ? '' : 'none';
+  $('cloudBaselineLabel').textContent = R.olsfB ? 'МНК с истинными факторами' : 'МНК без факторов';
   if (R.olsfB) sets.push({ B: R.olsfB, cls: 'olsf' }); else if (R.olsnfB) sets.push({ B: R.olsnfB, cls: 'olsf' });
   sets.push({ B: R.ours.B, cls: 'ours' });
   const proj = (B) => {
@@ -788,7 +787,7 @@ function renderCloud() {
   for (const s of all) for (const [x, y] of s.pts) b += `<circle class="f-${s.cls}" cx="${sx(x).toFixed(1)}" cy="${sy(y).toFixed(1)}" r="3.2" fill-opacity="${s.cls === 'ours' ? 0.85 : 0.55}"/>`;
   for (const x of trueX) b += `<line class="s-oracle" x1="${sx(x).toFixed(1)}" x2="${sx(x).toFixed(1)}" y1="${sy(0) - 4}" y2="${sy(0) + 4}" stroke-width="1"/>`;
   b += `<text x="${(L + W - Rr) / 2}" y="${H - 4}" text-anchor="middle">${W < 460 ? 'вдоль первого индекса (штрихи — истина)' : 'наклон вдоль первого индекса (штрихи — истинные значения)'}</text>`;
-  b += `<text x="12" y="${(T0 + H - B0) / 2}" text-anchor="middle" transform="rotate(-90 12 ${(T0 + H - B0) / 2})">выход из плоскости</text>`;
+  b += `<text x="12" y="${(T0 + H - B0) / 2}" text-anchor="middle" transform="rotate(-90 12 ${(T0 + H - B0) / 2})">расстояние до подпространства</text>`;
   svgEl('cloud', W, H, b);
 }
 
@@ -844,38 +843,36 @@ function lineChart(id, xs, series, opts) {
 
 function renderConv() {
   const { R } = state.last, o = R.ours;
-  const xs = o.errs.map((_, k) => k);
-  lineChart('conv', xs, [{ cls: 'ours', ys: o.errs }, { cls: 'oracle', flat: R.err.oracle }], { xlabel: 'итерация', h: 240 });
-  const ang = o.angles.length ? o.angles[o.angles.length - 1] : null;
-  $('convStats').innerHTML = `<span>итераций: <b>${o.iters}</b></span><span>время: <b>${fmt(R.tOurs / 1000, 2)} с</b></span>` +
-    (ang != null ? `<span>угол между найденными и истинными факторами: <b>${fmt(ang, 2)}</b></span>` : '<span>факторы не оцениваются (r = 0)</span>');
+  const criterion = state.iteration === 'criterion';
+  const values = criterion ? o.hist : o.errs;
+  const series = [{ cls: 'ours', ys: values }];
+  if (!criterion) series.push({ cls: 'oracle', flat: R.err.oracle });
+  $('conv').setAttribute('aria-label', criterion ? 'Профильный критерий по итерациям' : 'Ошибка наклонов по итерациям');
+  lineChart('conv', values.map((_, k) => criterion ? k + 1 : k), series, { xlabel: 'итерация', h: 240 });
+  const distance = R.factorDistance;
+  $('convStats').innerHTML = '<span>итераций: <b>' + o.iters + '</b></span>' +
+    '<span>критерий: <b>' + fmt(o.hist[0], 2) + ' → ' + fmt(o.hist.at(-1), 2) + '</b></span>' +
+    (distance == null ? '' : '<span>синус наибольшего угла между факторными подпространствами: <b>' + fmt(distance) + '</b></span>');
 }
 
 function renderVerdict() {
   const { R, p, a } = state.last, e = R.err;
-  const lines = [];
-  let big;
-  if (e.olsf != null) {
-    const k = e.olsf / e.ours;
-    big = k >= 1.05 ? `Наша модель ошибается в ${fmt(k, 1)} раза меньше, чем МНК по каждому индивиду с факторами.` : (k > 0.95 ? 'Наша модель и МНК по каждому индивиду с факторами здесь примерно равны.' : `Здесь МНК по каждому индивиду точнее нашей модели в ${fmt(1 / k, 1)} раза.`);
-  } else big = `МНК по каждому индивиду здесь невозможен: наблюдений на индивида (T = ${p.T}) не больше, чем параметров (d + r + 1 = ${p.d + a.ralg + 1}). Наша модель работает: ошибка ${fmt(e.ours)}.`;
-  const gap = (e.ours - e.oracle) / e.oracle;
-  if (a.ralg < p.r) lines.push(`<span class="warn">Алгоритм берёт ${a.ralg} из ${p.r} факторов. Неучтённые факторы остаются в ошибке, и наклоны смещены: до оракула ${fmt(e.ours / e.oracle, 1)} раза.</span>`);
-  else if (a.malg < p.m) lines.push(`<span class="warn">Алгоритм берёт ${a.malg} из ${p.m} индексов: часть реакции на признаки он отбрасывает, отсюда смещение.</span>`);
-  else lines.push(gap < 0.08 ? `До оракула, которому подсказаны факторы, не хватает всего ${fmt(Math.max(0, gap) * 100, 0)}%: незнание факторов почти ничего не стоит.` : `До оракула, которому подсказаны факторы, не хватает ${fmt(gap * 100, 0)}%.`);
-  if (p.r > 0 && p.conf > 0.15) lines.push(`Без учёта факторов ошибка ${fmt(Math.min(e.olsnf ?? Infinity, e.lrnf))}: это смещение из-за связи признаков с факторами, и с ростом данных оно не уходит.`);
-  if (p.r > 0 && p.conf <= 0.15) lines.push('Признаки почти не связаны с факторами, поэтому смещения нет, но учёт факторов всё равно уменьшает шум.');
-  $('verdict').innerHTML = `<div class="big">${big}</div>` + lines.map(l => `<p>${l}</p>`).join('');
+  const baseline = e.olsf == null
+    ? 'Для индивидуального МНК с истинными факторами требуется T ≥ d + r + 1 (T = ' + p.T + ', порог ' + (p.d + p.r + 1) + ').'
+    : 'Индивидуальный МНК с истинными факторами: ' + fmt(e.olsf) + '.';
+  $('verdict').innerHTML = '<div class="big">Ошибка предложенной оценки: ' + fmt(e.ours) + '</div><p>' +
+    baseline + ' Многоиндексный оракул: ' + fmt(e.oracle) + '.</p><p>Оцениваем m = ' + a.malg +
+    ', r = ' + a.ralg + '. В данных m = ' + p.m + ', r = ' + p.r + '.</p>';
 }
 
 function render() { renderVerdict(); renderBars(); renderCloud(); renderHeat(); renderConv(); }
 
 // ---------- эксперимент ----------
 const SWEEP = {
-  T: { label: 'длина ряда T', vals: (p) => [15, 25, 40, 60, 100, 150, 250, 400], note: 'На коротких рядах МНК по каждому индивиду очень шумный или вообще невозможен, а малый ранг работает. С ростом T МНК догоняет, но наша модель остаётся у оракула. Методы без факторов не улучшаются: их ошибка — смещение.' },
-  n: { label: 'число индивидов n', vals: () => [20, 40, 80, 150, 300], note: 'Чем больше индивидов, тем точнее оцениваются общие индексы и факторы, и наша модель подходит к оракулу. МНК по каждому индивиду от n не зависит: каждый индивид оценивается сам по себе.' },
-  conf: { label: 'связь признаков с факторами', vals: () => [0, 0.25, 0.5, 0.75, 1, 1.5, 2], note: 'Без связи с факторами все методы несмещённые. Чем сильнее связь, тем больше смещение у методов без факторов. Наша модель от силы связи почти не зависит.' },
-  d: { label: 'число признаков d', vals: () => [4, 8, 12, 16, 20, 25, 30], note: 'МНК по каждому индивиду оценивает d чисел на индивида, и его ошибка растёт с d. Малый ранг оценивает m чисел на индивида плюс общие индексы, поэтому растёт гораздо медленнее.' },
+  T: { label: 'длина ряда T', vals: (p) => [15, 25, 40, 60, 100, 150, 250, 400], note: 'Сравните ошибки при разной длине ряда.' },
+  n: { label: 'число индивидов n', vals: () => [20, 40, 80, 150, 300], note: 'Сравните ошибки при разном числе индивидов.' },
+  conf: { label: 'связь признаков с факторами', vals: () => [0, 0.25, 0.5, 0.75, 1, 1.5, 2], note: 'При нуле факторы отсутствуют в признаках, но могут влиять на отклик.' },
+  d: { label: 'число признаков d', vals: () => [4, 8, 12, 16, 20, 25, 30], note: 'С ростом d индивидуальному МНК нужно оценивать больше коэффициентов.' },
 };
 function drawSweep() { const r = state.sweepRes; lineChart('sweep', r.xs, r.series, { xlabel: r.label + ' (остальное как на панели слева, по 3 набора данных на точку)', h: 320, cap: 1 }); }
 function renderSweepKeys() {
@@ -931,6 +928,11 @@ function init() {
   document.querySelectorAll('#heatMode button').forEach(b => b.addEventListener('click', () => {
     state.heat = b.dataset.mode; document.querySelectorAll('#heatMode button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
     if (state.last) renderHeat();
+  }));
+  document.querySelectorAll('#iterationMode button').forEach(button => button.addEventListener('click', () => {
+    state.iteration = button.dataset.mode;
+    document.querySelectorAll('#iterationMode button').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    if (state.last) renderConv();
   }));
   document.querySelectorAll('#sweepParam button').forEach(b => b.addEventListener('click', () => {
     state.sweepP = b.dataset.p; document.querySelectorAll('#sweepParam button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
